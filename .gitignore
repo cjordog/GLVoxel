@@ -1,5 +1,2 @@
 bin/
 Generated/
-Libraries/*
-!Libraries/*.lua
-!Libraries/GLAD/
