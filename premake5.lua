@@ -42,7 +42,7 @@ project "GLVoxel"
     objdir "Generated/obj/%{cfg.buildcfg}"
   --  abspath "J:/Projects/GLVoxel"
 
-    postbuildcommands { '{COPY} "J:/Projects/GLVoxel/Source/Shaders" "J:/Projects/GLVoxel/%{cfg.targetdir}"' }
+    -- postbuildcommands { '{COPY} "J:/Projects/GLVoxel/Source/Shaders/" "J:/Projects/GLVoxel/%{cfg.targetdir}"' }
 
     filter "system:linux"
         links { "dl", "pthread" }
