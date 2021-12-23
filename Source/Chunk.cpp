@@ -123,6 +123,18 @@ void Chunk::GenerateMesh()
 					glm::vec3 offset{ x,y,z };
 					for (uint i = 0; i < BlockFace::NumFaces; i++)
 					{
+						uint neighborX = x + s_normals[i].x;
+						uint neighborY = y + s_normals[i].y;
+						uint neighborZ = z + s_normals[i].z;
+
+						if (!(neighborX < 0 || neighborX >= CHUNK_VOXEL_SIZE ||
+							neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
+							neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
+						{
+							if (m_voxels[neighborX][neighborY][neighborZ] == Dirt)
+								continue;
+						}
+
 						for (uint j = 0; j < 4; j++)
 						{
 							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_normals[i] });
