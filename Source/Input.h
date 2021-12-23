@@ -12,6 +12,7 @@ public:
 	void ProcessInput();
 	void ProcessMousePos(GLFWwindow* window, double xpos, double ypos);
 	void Poll();
+	//void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods);
 
 private:
 	Window* m_window;

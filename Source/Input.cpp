@@ -1,10 +1,23 @@
 #include "Input.h"
+#include "RenderSettings.h"
 #include <GLFW/glfw3.h>
+
+// used to process events only once, since it gets called once per key event, instead of polling in ProcessEvents
+static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
+{
+	if (key == GLFW_KEY_R && action == GLFW_PRESS)
+	{
+		RenderSettings& renderSettings = RenderSettings::Get();
+		renderSettings.m_drawMode = RenderSettings::DrawMode(!renderSettings.m_drawMode);
+	}
+}
 
 Input::Input(Window* w)
 	: m_window(w)
 {
-	glfwSetInputMode(w->GetGLFWWindow(), GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	GLFWwindow* glfwWin = w->GetGLFWWindow();
+	glfwSetInputMode(glfwWin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	glfwSetKeyCallback(glfwWin, KeyCallback);
 }
 
 void Input::ProcessInput()
@@ -44,6 +57,11 @@ void Input::ProcessInput()
 	m_inputData.m_mouseButtons.y = (glfwGetMouseButton(glfwWin, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS);
 
 	m_isFirstFrame = false;
+
+
+	if (glfwGetKey(glfwWin, GLFW_KEY_R) == GLFW_PRESS)
+	{
+	}
 }
 
 void Input::Poll()

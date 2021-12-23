@@ -4,6 +4,7 @@
 #include <vector>
 
 #include "Common.h"
+#include "RenderSettings.h"
 
 class Chunk
 {
@@ -34,7 +35,7 @@ public:
 	uint GetVertexCount() { return m_vertexCount; }
 	uint GetIndexCount() { return m_indexCount; }
 
-	void Render();
+	void Render(RenderSettings::DrawMode drawMode);
 
 private:
 	void Generate();

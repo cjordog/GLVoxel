@@ -35,5 +35,5 @@ void VoxelScene::Render(Camera* camera)
 
 	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
 	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(Projection));
-	m_chunks[glm::i32vec3(0, 0, 0)]->Render();
+	m_chunks[glm::i32vec3(0, 0, 0)]->Render(RenderSettings::Get().m_drawMode);
 }

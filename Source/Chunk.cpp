@@ -80,10 +80,13 @@ static uint s_indices[] = {
 	1, 3, 2
 };
 
-void Chunk::Render()
+void Chunk::Render(RenderSettings::DrawMode drawMode)
 {
 	glBindVertexArray(m_VAO);
-	glDrawElements(GL_TRIANGLES, m_indexCount, GL_UNSIGNED_INT, 0);
+	//glDrawElements(GL_TRIANGLES, m_indexCount, GL_UNSIGNED_INT, 0);
+
+	uint dm = (drawMode == RenderSettings::DrawMode::Triangles ? GL_TRIANGLES : GL_LINES);
+	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);
 }
 
 void Chunk::Generate()
