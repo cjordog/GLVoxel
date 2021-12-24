@@ -15,7 +15,6 @@ const uint RENDER_DISTANCE = 5;
 VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
-	//CreateChunk(0, 0, 0);
 }
 
 void VoxelScene::InitShared()
@@ -35,7 +34,7 @@ void VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 void VoxelScene::Update(const glm::vec3& position)
 {
 	// update in concentric circles outwards from position
-	for (int i = 0; i < RENDER_DISTANCE; i++)
+	for (int i = 0; i <= RENDER_DISTANCE; i++)
 	{
 		//uint updateDiameter = i * 2 + 1;
 		for (int j = -i; j <= i; j++)
@@ -70,7 +69,6 @@ void VoxelScene::Render(Camera* camera)
 
 		chunk.second->Render(drawMode);
 	}
-	//m_chunks[glm::i32vec3(0, 0, 0)]->Render(RenderSettings::Get().m_drawMode);
 }
 
 glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
