@@ -26,7 +26,7 @@ project "GLVoxel"
 	architecture "x86_64"
 --	entrypoint "main"
 
-    includedirs { "Source/*.h", "Libraries/glad/include/", "Libraries/glfw/include/", "Libraries/glm/", "Libraries/imgui/", "Libraries/imgui/examples" }
+    includedirs { "Source/*.h", "Libraries/glad/include/", "Libraries/glfw/include/", "Libraries/glm/", "Libraries/imgui/", "Libraries/imgui/examples", "Libraries/FastNoise2/include/", }
     
     vpaths { 
         ["Headers"] = "Source/**.h",
@@ -58,3 +58,4 @@ include "Libraries/glfw.lua"
 include "Libraries/glad.lua"
 include "Libraries/glm.lua"
 include "Libraries/imgui.lua"
+include "Libraries/FastNoise2.lua"

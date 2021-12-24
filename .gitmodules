@@ -7,3 +7,6 @@
 [submodule "Libraries/imgui"]
 	path = Libraries/imgui
 	url = https://github.com/ocornut/imgui
+[submodule "Libraries/FastNoise2"]
+	path = Libraries/FastNoise2
+	url = https://github.com/Auburn/FastNoise2/
