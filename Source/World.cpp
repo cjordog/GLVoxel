@@ -107,6 +107,7 @@ void World::Render()
 void World::Update(InputData* inputData)
 {
 	m_camera.Transform(inputData->m_moveInput * 0.05f, -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+	m_voxelScene.Update(m_camera.GetPosition());
 }
 
 uint World::LoadTexture(const char* image, ImageFormat fmt)

@@ -13,6 +13,7 @@ public:
 
 	void Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta);
 	glm::mat4 GetViewMatrix() { return m_viewMatrix; }
+	const glm::vec3 GetPosition() { return m_position; }
 
 private:
 	glm::vec3 m_position;
