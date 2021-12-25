@@ -9,7 +9,7 @@
 class Chunk
 {
 public:
-	Chunk();
+	Chunk(const glm::vec3& chunkPos);
 
 	enum BlockType : uint8_t
 	{
@@ -38,7 +38,7 @@ public:
 	void Render(RenderSettings::DrawMode drawMode);
 
 private:
-	void Generate();
+	void Generate(const glm::vec3& chunkPos);
 	void GenerateMesh();
 
 	BlockType m_voxels[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { BlockType(0) };

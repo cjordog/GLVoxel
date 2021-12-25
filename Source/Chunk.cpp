@@ -1,10 +1,11 @@
 #include "Chunk.h"
 #include <glad/glad.h>
 #include <iostream>
+#include "glm/gtc/noise.hpp"
 
-Chunk::Chunk()
+Chunk::Chunk(const glm::vec3& chunkPos)
 {
-	Generate();
+	Generate(chunkPos);
 
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
 	glGenVertexArrays(1, &m_VAO);
@@ -89,7 +90,7 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);
 }
 
-void Chunk::Generate()
+void Chunk::Generate(const glm::vec3& chunkPos)
 {
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
@@ -97,7 +98,8 @@ void Chunk::Generate()
 		{
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				if (y > x + z)
+				if (y / float(UNIT_VOXEL_RESOLUTION) + chunkPos.y * float(CHUNK_UNIT_SIZE) > 
+					glm::perlin((glm::vec2(chunkPos.x, chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 13.f) * 8.f)
 					m_voxels[x][y][z] = Air;
 				else
 					m_voxels[x][y][z] = Dirt;

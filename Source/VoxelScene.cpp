@@ -27,7 +27,7 @@ void VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 	if (m_chunks[chunkPos])
 		return;
 
-	Chunk* chunk = new Chunk();
+	Chunk* chunk = new Chunk(chunkPos);
 	m_chunks[chunkPos] = chunk;
 }
 
