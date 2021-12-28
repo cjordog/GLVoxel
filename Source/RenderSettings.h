@@ -1,14 +1,15 @@
 #pragma once
 
+#include "Common.h"
+
 class RenderSettings
 {
 public:
 
-	enum DrawMode
+	enum DrawMode : uint
 	{
 		Triangles = 0,
 		Wireframe,
-
 	};
 
 	static RenderSettings& Get();

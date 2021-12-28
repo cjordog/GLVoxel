@@ -37,3 +37,23 @@ struct Vertex
 	glm::vec3 color;
 	glm::vec3 normal;
 };
+
+enum BlockFace : uint8_t
+{
+	Front = 0,	// +z
+	Back,		// -z
+	Right,		// +x
+	Left,		// -x
+	Top,		// +y
+	Bottom,		// -y
+	NumFaces
+};
+
+const static glm::vec3 s_blockNormals[BlockFace::NumFaces] = {
+	{ 0, 0, 1 },	// Front 
+	{ 0, 0, -1 },	// Back
+	{ 1, 0, 0 },	// Right
+	{ -1, 0, 0 },	// Left
+	{ 0, 1, 0 },	// Top
+	{ 0, -1, 0 }	// Bottom
+};

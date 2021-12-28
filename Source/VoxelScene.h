@@ -17,7 +17,7 @@ public:
 
 	static void InitShared();
 
-	void CreateChunk(const glm::i32vec3& chunkPos);
+	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
 	void Update(const glm::vec3& position);
 	void Render(Camera* camera);
 
