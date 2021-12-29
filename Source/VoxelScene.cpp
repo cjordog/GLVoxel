@@ -188,7 +188,7 @@ void VoxelScene::Render(Camera* camera)
 		if (chunk == nullptr)
 			continue;
 
-		if (chunk->IsEmpty())
+		if (chunk->IsEmpty() || chunk->IsNoGeo())
 			continue;
 
 		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunkPos) * float(CHUNK_UNIT_SIZE));

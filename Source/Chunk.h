@@ -27,6 +27,7 @@ public:
 	BlockType GetBlockType(uint x, uint y, uint z) const;
 
 	bool IsEmpty() const { return bool(m_empty); }
+	bool IsNoGeo() const { return bool(m_noGeo); }
 
 	void Render(RenderSettings::DrawMode drawMode) const;
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);
@@ -55,4 +56,5 @@ private:
 	uint m_generated		: 1 = 0;
 	uint m_meshGenerated	: 1 = 0;
 	uint m_empty			: 1 = 1;
+	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
 };
