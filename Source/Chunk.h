@@ -24,6 +24,8 @@ public:
 	uint GetVertexCount() { return m_vertexCount; }
 	uint GetIndexCount() { return m_indexCount; }
 
+	BlockType GetBlockType(uint x, uint y, uint z) const;
+
 	bool IsEmpty() const { return bool(m_empty); }
 
 	void Render(RenderSettings::DrawMode drawMode) const;

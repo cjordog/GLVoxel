@@ -55,31 +55,114 @@ void VoxelScene::Update(const glm::vec3& position)
 
 						if (newChunk)
 						{
-							newChunk->GenerateMesh();
 							generateMeshList.emplace(newChunk);
 
 							// notify neighbors
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Front])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Back, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Front, neighbor);
+							}
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Back])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Front, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Back, neighbor);
+							}
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Right])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Left, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Right, neighbor);
+							}
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Left])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Right, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Left, neighbor);
+							}
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Top])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Bottom, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Top, neighbor);
+							}
 							if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Bottom])])
+							{
 								if (neighbor->UpdateNeighborRef(BlockFace::Top, newChunk))
 									generateMeshList.emplace(neighbor);
+								newChunk->UpdateNeighborRef(BlockFace::Bottom, neighbor);
+							}
 						}
 					}
 				}
+			}
+		}
+	}
+	for (auto& chunk : generateMeshList)
+	{
+		chunk->GenerateMesh();
+	}
+}
+
+void VoxelScene::TestUpdate(const glm::vec3& position)
+{
+	std::unordered_set<Chunk*> generateMeshList;
+	std::vector<glm::vec3> poss = {
+		glm::vec3(0, -1, 0),
+		glm::vec3(1, -1, 0),
+		glm::vec3(-1, -1, 0),
+		glm::vec3(0, 0, 0),
+		glm::vec3(0, -2, 0),
+		glm::vec3(0, -1, 1),
+		glm::vec3(0, -1, -1),
+	};
+	for (auto pos : poss)
+	{
+		glm::i32vec3 chunkPos = glm::i32vec3(pos);
+		Chunk* newChunk = CreateChunk(chunkPos);
+
+		if (newChunk)
+		{
+			generateMeshList.emplace(newChunk);
+
+			// notify neighbors
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Front])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Back, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Front, neighbor);
+			}
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Back])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Front, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Back, neighbor);
+			}
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Right])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Left, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Right, neighbor);
+			}
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Left])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Right, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Left, neighbor);
+			}
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Top])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Bottom, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Top, neighbor);
+			}
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Bottom])])
+			{
+				if (neighbor->UpdateNeighborRef(BlockFace::Top, newChunk))
+					generateMeshList.emplace(neighbor);
+				newChunk->UpdateNeighborRef(BlockFace::Bottom, neighbor);
 			}
 		}
 	}

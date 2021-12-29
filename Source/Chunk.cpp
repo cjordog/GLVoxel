@@ -59,6 +59,13 @@ static uint s_indices[] = {
 	1, 3, 2
 };
 
+Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
+{
+	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE)
+		return Air;
+	return m_voxels[x][y][z];
+}
+
 void Chunk::Render(RenderSettings::DrawMode drawMode) const
 {
 	if (!m_meshGenerated)
@@ -127,6 +134,9 @@ void Chunk::GenerateMesh()
 
 	m_vertexCount = 0;
 	m_indexCount = 0;
+
+	m_vertices.clear();
+	m_indices.clear();
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -138,10 +148,12 @@ void Chunk::GenerateMesh()
 					glm::vec3 offset{ x,y,z };
 					for (uint i = 0; i < BlockFace::NumFaces; i++)
 					{
-						uint neighborX = x + s_blockNormals[i].x;
-						uint neighborY = y + s_blockNormals[i].y;
-						uint neighborZ = z + s_blockNormals[i].z;
+						const glm::vec normal = s_blockNormals[i];
+						int neighborX = x + normal.x;
+						int neighborY = y + normal.y;
+						int neighborZ = z + normal.z;
 
+						// if we're not checking an edge face
 						if (!(neighborX < 0 || neighborX >= CHUNK_VOXEL_SIZE ||
 							neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
 							neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
@@ -149,15 +161,32 @@ void Chunk::GenerateMesh()
 							if (m_voxels[neighborX][neighborY][neighborZ] == Dirt)
 								continue;
 						}
-						else // were on the edge of the chunk
+						else // were on the edge face of the chunk
 						{
 							// compare with neighboring chunk, if it exists
+							if (const Chunk* neighborChunk = m_neighbors[i])
+							{
+								//if (i == 0)
+								if (neighborChunk->m_generated &&
+									!neighborChunk->IsEmpty())
+								{
+									if (normal.x)
+										neighborX += (neighborX < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
+									if (normal.y)
+										neighborY += (neighborY < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
+									if (normal.z != 0.0f)
+										neighborZ += (neighborZ < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
 
+									if (neighborChunk->GetBlockType(neighborX, neighborY, neighborZ) == Dirt)
+										continue;
+								}
+							}
 						}
 
+						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_blockNormals[i] });
+ 							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_blockNormals[i] });
 						}
 						for (uint j = 0; j < 6; j++)
 						{
