@@ -1,0 +1,51 @@
+- VBO
+	- actual buffer for vertex data
+
+- vertex attribute
+	- one  thing that a vertex has in data
+		- ie position, normal, uv, etc
+	- set via glVertexAttribPointer, glEnableVertexAttribArray
+		- should have vao,vbo,ebo bound before calling these
+
+- VAO
+	- stores vertex attribute calls
+	- more specifically stores
+		- Calls to glEnableVertexAttribArray or glDisableVertexAttribArray.
+		- Vertex attribute configurations via glVertexAttribPointer.
+		- Vertex buffer objects associated with vertex attributes by calls to glVertexAttribPointer.
+
+- EBO (element buffer object)
+	- index buffer
+	- use glDrawElements instead of glDrawArrays
+
+- setting up buffers
+	- glGenBuffers 	(glGenVertexArrays)
+	- glBindBuffer	(glBindVertexArray)
+	- glBufferData
+
+
+- Textures
+	- glGenTextures
+	- glBindTexture
+	- glTexImage2D
+	- (glgenerateMipMap)
+
+	- glTexParameteri works on currently bound texture
+	- texture filtering can be set separately for both magnifying and minifying operations (scaling up or down)
+	- texture unit is the location of a texture
+		- glActiveTexture(textureUnit) activates that texture unit
+		- subsequent bind binds to that unit
+
+- GLSL
+	- explicit uniform locations
+		- use #extension GL_ARB_explicit_uniform_location : enable
+		- It is illegal to assign the same uniform location to two uniforms in the same shader or the same program
+			- vertex attributes are not included in this, they use separate locations
+
+Coordinate systems
+	- local space -> model(world) matrix
+	- world space -> view matrix
+	- view space -> proj matrix
+	- clip space (-1 to 1) (Normalized Device Coordinates) -> viewport transform (defined by glViewPort)
+	- screen space (0 to 1)
+	- opengl uses right handed coords, y-up, -z forward
