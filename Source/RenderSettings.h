@@ -6,7 +6,7 @@ class RenderSettings
 {
 public:
 
-	enum DrawMode : uint
+	enum class DrawMode : uint
 	{
 		Triangles = 0,
 		Wireframe,

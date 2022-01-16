@@ -1,0 +1,10 @@
+- frustum culling
+- cave generation
+- frame timer
+- imgui 
+- block types
+- all things rendering
+- greedy meshing?
+- compute or geo shader for voxel generation?
+- threading
+- use profiler for checking cache misses

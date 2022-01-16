@@ -62,7 +62,7 @@ static uint s_indices[] = {
 Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 {
 	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE)
-		return Air;
+		return BlockType::Air;
 	return m_voxels[x][y][z];
 }
 
@@ -112,13 +112,13 @@ void Chunk::Generate(const glm::vec3& chunkPos)
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
 				if (y / float(UNIT_VOXEL_RESOLUTION) + chunkPos.y * float(CHUNK_UNIT_SIZE) >
-					glm::perlin((glm::vec2(chunkPos.x, chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 13.f) * 8.f)
+					glm::perlin((glm::vec2(chunkPos.x, chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 57.f) * 20.f)
 				{
-					m_voxels[x][y][z] = Air;
+					m_voxels[x][y][z] = BlockType::Air;
 				}
 				else 
 				{
-					m_voxels[x][y][z] = Dirt;
+					m_voxels[x][y][z] = BlockType::Dirt;
 					m_empty = 0;
 				}
 			}
@@ -143,7 +143,7 @@ void Chunk::GenerateMesh()
 		{
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				if (m_voxels[x][y][z] == Dirt)
+				if (m_voxels[x][y][z] == BlockType::Dirt)
 				{
 					glm::vec3 offset{ x,y,z };
 					for (uint i = 0; i < BlockFace::NumFaces; i++)
@@ -158,7 +158,7 @@ void Chunk::GenerateMesh()
 							neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
 							neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
 						{
-							if (m_voxels[neighborX][neighborY][neighborZ] == Dirt)
+							if (m_voxels[neighborX][neighborY][neighborZ] == BlockType::Dirt)
 								continue;
 						}
 						else // were on the edge face of the chunk
@@ -177,7 +177,7 @@ void Chunk::GenerateMesh()
 									if (normal.z != 0.0f)
 										neighborZ += (neighborZ < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
 
-									if (neighborChunk->GetBlockType(neighborX, neighborY, neighborZ) == Dirt)
+									if (neighborChunk->GetBlockType(neighborX, neighborY, neighborZ) == BlockType::Dirt)
 										continue;
 								}
 							}

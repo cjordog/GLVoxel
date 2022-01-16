@@ -4,6 +4,7 @@
 #include "GX.h"
 #include <GLFW/glfw3.h>
 
+#include <chrono>
 #include <iostream>
 
 // settings
@@ -27,10 +28,17 @@ int main()
 	World::InitShared();
 	world.Init();
 
+	auto lastFrameTime = std::chrono::high_resolution_clock::now();
+
 	while (!window.ShouldClose())
 	{
 		input.ProcessInput();
-		world.Update(input.GetInputData());
+
+		auto currentTime = std::chrono::high_resolution_clock::now();
+		std::chrono::duration<double, std::milli> frameTime = currentTime - lastFrameTime;
+		lastFrameTime = currentTime;
+
+		world.Update(frameTime.count(), input.GetInputData());
 		world.Render();
 		GX::SwapBuffers(window.GetGLFWWindow());
 		input.Poll();

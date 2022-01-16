@@ -104,9 +104,10 @@ void World::Render()
 	m_voxelScene.Render(&m_camera);
 }
 
-void World::Update(InputData* inputData)
+void World::Update(float updateTime, InputData* inputData)
 {
-	m_camera.Transform(inputData->m_moveInput * 0.05f, -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+	// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
+	m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
 	m_voxelScene.Update(m_camera.GetPosition());
 }
 

@@ -11,7 +11,7 @@ class Chunk
 public:
 	Chunk(const glm::vec3& chunkPos);
 
-	enum BlockType : uint8_t
+	enum class BlockType : uint8_t
 	{
 		Air = 0,
 		Dirt,

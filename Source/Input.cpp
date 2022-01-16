@@ -8,7 +8,8 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 	if (key == GLFW_KEY_R && action == GLFW_PRESS)
 	{
 		RenderSettings& renderSettings = RenderSettings::Get();
-		renderSettings.m_drawMode = RenderSettings::DrawMode(!renderSettings.m_drawMode);
+		RenderSettings::DrawMode newMode = renderSettings.m_drawMode == RenderSettings::DrawMode::Wireframe ? RenderSettings::DrawMode::Triangles : RenderSettings::DrawMode::Wireframe;
+		renderSettings.m_drawMode = RenderSettings::DrawMode(newMode);
 	}
 }
 
@@ -57,11 +58,6 @@ void Input::ProcessInput()
 	m_inputData.m_mouseButtons.y = (glfwGetMouseButton(glfwWin, GLFW_MOUSE_BUTTON_2) == GLFW_PRESS);
 
 	m_isFirstFrame = false;
-
-
-	if (glfwGetKey(glfwWin, GLFW_KEY_R) == GLFW_PRESS)
-	{
-	}
 }
 
 void Input::Poll()

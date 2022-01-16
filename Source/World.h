@@ -13,7 +13,7 @@ public:
 	static bool InitShared();
 	bool Init();
 	void Render();
-	void Update(InputData* inputData);
+	void Update(float updateTime, InputData* inputData);
 	enum ImageFormat {
 		PNG = 0,
 		JPG = 1,
