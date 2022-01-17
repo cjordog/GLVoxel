@@ -8,3 +8,5 @@
 - compute or geo shader for voxel generation?
 - threading
 - use profiler for checking cache misses
+- skybox rendering
+- LODing? depends on approach
