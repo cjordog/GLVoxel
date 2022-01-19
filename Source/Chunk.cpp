@@ -276,9 +276,39 @@ void Chunk::GenerateGreedyMeshInt()
 					BlockType t1 = BlockType::Air;
 					BlockType t2 = BlockType::Air;
 					if (x[dim] >= 0)
+					{
 						t1 = m_voxels[x[0]][x[1]][x[2]];
+					}
+					else
+					{
+						glm::i32vec3 x2(x);
+						x2[dim] += CHUNK_VOXEL_SIZE;
+						if (const Chunk* neighborChunk = m_neighbors[ConvertDirToNeighborIndex(-sweepDir)])
+						{
+							if (neighborChunk->m_generated &&
+								!neighborChunk->IsEmpty())
+							{
+								t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
+							}
+						}
+					}
 					if (x[dim] < int(CHUNK_VOXEL_SIZE - 1))
+					{
 						t2 = m_voxels[x[0] + sweepDir[0]][x[1] + sweepDir[1]][x[2] + sweepDir[2]];
+					}
+					else
+					{
+						glm::i32vec3 x2(x);
+						x2[dim] -= int(CHUNK_VOXEL_SIZE);
+						if (const Chunk* neighborChunk = m_neighbors[ConvertDirToNeighborIndex(sweepDir)])
+						{
+							if (neighborChunk->m_generated &&
+								!neighborChunk->IsEmpty())
+							{
+								t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
+							}
+						}
+					}
 
 					bool o1 = BlockIsOpaque(t1);
 					bool o2 = BlockIsOpaque(t2);
@@ -385,4 +415,11 @@ void Chunk::GenerateGreedyMeshInt()
 			}
 		}
 	}
+}
+
+int Chunk::ConvertDirToNeighborIndex(const glm::vec3& dir)
+{
+	// idk if this is faster than just an if statement but its cool
+	//return (0.5f - 0.5f * dir.x) * abs(dir.x) + (2.5f - 0.5f * dir.y) * abs(dir.y) + (4.5f - 0.5f * dir.z) * abs(dir.z);
+	return glm::dot(glm::abs(dir), glm::vec3(0.5f, 2.5f, 4.5f) - 0.5f * dir);
 }

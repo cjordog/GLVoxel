@@ -8,11 +8,11 @@ typedef unsigned int uint;
 #define PI 3.14159f
 
 // how many voxels per chunk
-constexpr uint CHUNK_VOXEL_SIZE = 8;
+constexpr int CHUNK_VOXEL_SIZE = 8;
 // how many voxels per unit of space
-constexpr uint UNIT_VOXEL_RESOLUTION = 1;
+constexpr int UNIT_VOXEL_RESOLUTION = 1;
 // how many units does a chunk take up
-constexpr uint CHUNK_UNIT_SIZE = CHUNK_VOXEL_SIZE / UNIT_VOXEL_RESOLUTION;
+constexpr int CHUNK_UNIT_SIZE = CHUNK_VOXEL_SIZE / UNIT_VOXEL_RESOLUTION;
 
 static_assert(CHUNK_VOXEL_SIZE % UNIT_VOXEL_RESOLUTION == 0);
 

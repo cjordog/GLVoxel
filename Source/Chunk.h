@@ -45,6 +45,8 @@ private:
 	void GenerateMeshInt();
 	void GenerateGreedyMeshInt();
 
+	int ConvertDirToNeighborIndex(const glm::vec3& dir);
+
 	// could be a rle instead of 3d array? https://0fps.net/2012/01/14/an-analysis-of-minecraft-like-engines/
 	// hard to tell whats better
 	BlockType m_voxels[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { BlockType(0) };
