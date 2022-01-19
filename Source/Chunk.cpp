@@ -267,6 +267,12 @@ void Chunk::GenerateGreedyMeshInt()
 		// sweep over current dimension
 		for (x[dim] = -1; x[dim] < int(CHUNK_VOXEL_SIZE); )
 		{
+			const Chunk* neighborChunk;
+			if (x[dim] == -1)
+				neighborChunk = m_neighbors[ConvertDirToNeighborIndex(-sweepDir)];
+			else if (x[dim] == CHUNK_VOXEL_SIZE - 1)
+				neighborChunk = m_neighbors[ConvertDirToNeighborIndex(sweepDir)];
+
 			int n = 0;
 			// setup mask
 			for (x[v] = 0; x[v] < CHUNK_VOXEL_SIZE; x[v]++)
@@ -283,13 +289,11 @@ void Chunk::GenerateGreedyMeshInt()
 					{
 						glm::i32vec3 x2(x);
 						x2[dim] += CHUNK_VOXEL_SIZE;
-						if (const Chunk* neighborChunk = m_neighbors[ConvertDirToNeighborIndex(-sweepDir)])
+						if (neighborChunk && 
+							neighborChunk->m_generated &&
+							!neighborChunk->IsEmpty())
 						{
-							if (neighborChunk->m_generated &&
-								!neighborChunk->IsEmpty())
-							{
-								t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
-							}
+							t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
 						}
 					}
 					if (x[dim] < int(CHUNK_VOXEL_SIZE - 1))
@@ -300,13 +304,11 @@ void Chunk::GenerateGreedyMeshInt()
 					{
 						glm::i32vec3 x2(x);
 						x2[dim] -= int(CHUNK_VOXEL_SIZE);
-						if (const Chunk* neighborChunk = m_neighbors[ConvertDirToNeighborIndex(sweepDir)])
+						if (neighborChunk &&
+							neighborChunk->m_generated &&
+							!neighborChunk->IsEmpty())
 						{
-							if (neighborChunk->m_generated &&
-								!neighborChunk->IsEmpty())
-							{
-								t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
-							}
+							t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
 						}
 					}
 
