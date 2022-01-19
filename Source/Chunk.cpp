@@ -8,49 +8,57 @@ Chunk::Chunk(const glm::vec3& chunkPos)
 {
 	Generate(chunkPos);
 
+	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
 	glGenVertexArrays(1, &m_VAO);
 	glGenBuffers(1, &m_VBO);
 	glGenBuffers(1, &m_EBO);
 }
 
+bool Chunk::BlockIsOpaque(BlockType t)
+{
+	if (t == BlockType::Air)
+		return false;
+	return true;
+}
+
 static glm::vec3 s_faces[BlockFace::NumFaces][4] =
 {
-	{	// Front
-		{0.5f,	0.5f,	0.5f},
-		{0.5f,  -0.5f,	0.5f},
-		{-0.5f, -0.5f,	0.5f},
-		{-0.5f, 0.5f,	0.5f}
-	},
-	{	// Back
-		{-0.5f,	0.5f,	-0.5f},
-		{-0.5f, -0.5f,	-0.5f},
-		{0.5f,	-0.5f,	-0.5f},
-		{0.5f,	0.5f,	-0.5f}
-	},
 	{	// right
-		{0.5f,	0.5f,	-0.5f},
-		{0.5f,	-0.5f,	-0.5f},
-		{0.5f,	-0.5f,	0.5f},
-		{0.5f,	0.5f,	0.5f}
+		{1.0f,	1.0f,	0.0f},
+		{1.0f,	0.0f,	0.0f},
+		{1.0f,	0.0f,	1.0f},
+		{1.0f,	1.0f,	1.0f}
 	},
 	{	// Left
-		{-0.5f,	0.5f,	0.5f},
-		{-0.5f, -0.5f,	0.5f},
-		{-0.5f,	-0.5f,	-0.5f},
-		{-0.5f,	0.5f,	-0.5f}
+		{0.0f,	1.0f,	1.0f},
+		{0.0f,	0.0f,	1.0f},
+		{0.0f,	0.0f,	0.0f},
+		{0.0f,	1.0f,	0.0f}
 	},
 	{	// Top
-		{0.5f,	 0.5f,	-0.5f},
-		{0.5f,	 0.5f,	0.5f},
-		{-0.5f,	 0.5f,	0.5f},
-		{-0.5f,  0.5f,	-0.5f}
+		{1.0f,	1.0f,	0.0f},
+		{1.0f,	1.0f,	1.0f},
+		{0.0f,	1.0f,	1.0f},
+		{0.0f,	1.0f,	0.0f}
 	},
 	{	// Bottom
-		{-0.5f,	-0.5f,	-0.5f},
-		{-0.5f, -0.5f,	0.5f},
-		{0.5f,	-0.5f,	0.5f},
-		{0.5f,	-0.5f,	-0.5f}
+		{0.0f,	0.0f,	0.0f},
+		{0.0f,	0.0f,	1.0f},
+		{1.0f,	0.0f,	1.0f},
+		{1.0f,	0.0f,	0.0f}
+	},
+	{	// Front
+		{1.0f,	1.0f,	1.0f},
+		{1.0f,  0.0f,	1.0f},
+		{0.0f,	0.0f,	1.0f},
+		{0.0f,	1.0f,	1.0f}
+	},
+	{	// Back
+		{0.0f,	1.0f,	0.0f},
+		{0.0f,	0.0f,	0.0f},
+		{1.0f,	0.0f,	0.0f},
+		{1.0f,	1.0f,	0.0f}
 	},
 };
 
@@ -137,6 +145,42 @@ void Chunk::GenerateMesh()
 
 	m_vertices.clear();
 	m_indices.clear();
+
+	if (RenderSettings::Get().greedyMesh)
+	{
+		GenerateGreedyMeshInt();
+	}
+	else
+	{
+		GenerateMeshInt();
+	}
+	
+	if (m_vertexCount == 0)
+	{
+		m_noGeo = 1;
+	}
+	else
+	{
+		glBindVertexArray(m_VAO);
+
+		glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
+		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data(), GL_STATIC_DRAW);
+		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
+		glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
+
+		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
+		glEnableVertexAttribArray(0);
+		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
+		glEnableVertexAttribArray(1);
+		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(2 * sizeof(glm::vec3)));
+		glEnableVertexAttribArray(2);
+	}
+
+	m_meshGenerated = 1;
+}
+
+void Chunk::GenerateMeshInt()
+{
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -174,7 +218,7 @@ void Chunk::GenerateMesh()
 										neighborX += (neighborX < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
 									if (normal.y)
 										neighborY += (neighborY < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
-									if (normal.z != 0.0f)
+									if (normal.z)
 										neighborZ += (neighborZ < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
 
 									if (neighborChunk->GetBlockType(neighborX, neighborY, neighborZ) == BlockType::Dirt)
@@ -186,7 +230,7 @@ void Chunk::GenerateMesh()
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
- 							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_blockNormals[i] });
+							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_blockNormals[i] });
 						}
 						for (uint j = 0; j < 6; j++)
 						{
@@ -200,27 +244,139 @@ void Chunk::GenerateMesh()
 			}
 		}
 	}
-	
-	if (m_vertexCount == 0)
+}
+
+// adopted from https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/
+void Chunk::GenerateGreedyMeshInt()
+{
+	// sweep over each axis
+	for (int dim = 0; dim < 3; dim++)
 	{
-		m_noGeo = 1;
+		// u,v indices of other two dimensions that were not sweeping
+		int u = (dim + 1) % 3;
+		int v = (dim + 2) % 3;
+
+		// x is scratch pad for position of the block were currently processing.
+		glm::i32vec3 x(0, 0, 0);
+		// direction were sweeping in
+		glm::i32vec3 sweepDir(0, 0, 0);
+		sweepDir[dim] = 1;
+
+		uint8_t mask[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { 0 };
+
+		// sweep over current dimension
+		for (x[dim] = -1; x[dim] < int(CHUNK_VOXEL_SIZE); )
+		{
+			int n = 0;
+			// setup mask
+			// these can just be i,j, doesnt need to be x
+			for (x[v] = 0; x[v] < CHUNK_VOXEL_SIZE; x[v]++)
+			{
+				for (x[u] = 0; x[u] < CHUNK_VOXEL_SIZE; x[u]++)
+				{
+					BlockType t1 = BlockType::Air;
+					BlockType t2 = BlockType::Air;
+					if (x[dim] >= 0)
+						t1 = m_voxels[x[0]][x[1]][x[2]];
+					if (x[dim] < int(CHUNK_VOXEL_SIZE - 1))
+						t2 = m_voxels[x[0] + sweepDir[0]][x[1] + sweepDir[1]][x[2] + sweepDir[2]];
+
+					bool o1 = BlockIsOpaque(t1);
+					bool o2 = BlockIsOpaque(t2);
+
+					// write 0 if both opaque, 1 if we want face pointing in pos dir, 2 if neg
+					mask[x[v]][x[u]] = (o1 == o2) ? 0 : ((o1 && !o2) ? 1 : 2);
+				}
+			}
+
+			x[dim]++;
+
+			for (int i = 0; i < CHUNK_VOXEL_SIZE; i++)
+			{
+				for (int j = 0; j < CHUNK_VOXEL_SIZE; )
+				{
+					if (int maskVal = mask[i][j])
+					{
+						int w = 1, h = 1;
+						while (j + w < CHUNK_VOXEL_SIZE && mask[i][j + w] == maskVal)
+						{
+							w++;
+						}
+						bool done = false;
+						while (i + h < CHUNK_VOXEL_SIZE && !done)
+						{
+							for (int k = 0; k < w; k++)
+							{
+								if (mask[i + h][j + k] != maskVal)
+								{
+									done = true;
+									break;
+								}
+							}
+							if (done)
+								break;
+							h++;
+						}
+
+						x[u] = j;
+						x[v] = i;
+
+						glm::i32vec3 du(0, 0, 0);
+						du[u] = w;
+						glm::i32vec3 dv(0, 0, 0);
+						dv[v] = h;
+
+						glm::vec3 vertices[4] = {
+							{x[0], x[1], x[2]},
+							{x[0] + du[0], x[1] + du[1], x[2] + du[2] },
+							{x[0] + du[0] + dv[0], x[1] + du[1] + dv[1], x[2] + du[2] + dv[2]},
+							{x[0] + dv[0], x[1] + dv[1], x[2] + dv[2]},
+						};
+
+						uint indices[6] = {
+								0, 3, 1,
+								1, 3, 2
+						};
+						if (maskVal == 1)
+						{ 
+							indices[1] = 1;
+							indices[2] = 3;
+							indices[4] = 2;
+							indices[5] = 3;
+						}
+
+						glm::vec3 normal = sweepDir;
+						if (maskVal == 2)
+							normal = -normal;
+
+						// add faces
+						for (uint m = 0; m < 4; m++)
+						{
+							m_vertices.push_back(Vertex{ vertices[m], sweepDir, normal });
+						}
+						for (uint m = 0; m < 6; m++)
+						{
+							m_indices.push_back(indices[m] + m_vertexCount);
+						}
+						m_indexCount += 6;
+						m_vertexCount += 4;
+						//Zero-out mask
+						for (int l = 0; l < h; ++l)
+						{
+							for (int k = 0; k < w; ++k)
+							{
+								mask[i + l][j + k] = 0;
+							}
+						}
+						//Increment counters and continue
+						j += w;
+					}
+					else
+					{
+						j++;  
+					}
+				}
+			}
+		}
 	}
-	else
-	{
-		glBindVertexArray(m_VAO);
-
-		glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data(), GL_STATIC_DRAW);
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
-
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(2 * sizeof(glm::vec3)));
-		glEnableVertexAttribArray(2);
-	}
-
-	m_meshGenerated = 1;
 }

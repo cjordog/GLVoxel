@@ -15,6 +15,8 @@ public:
 	static RenderSettings& Get();
 	
 	DrawMode m_drawMode;
+	bool greedyMesh = false;
+	bool deleteMesh = false;
 
 // https://stackoverflow.com/questions/1008019/c-singleton-design-pattern
 private:

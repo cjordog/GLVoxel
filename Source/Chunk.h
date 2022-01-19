@@ -19,6 +19,8 @@ public:
 		Stone,
 	};
 
+	bool BlockIsOpaque(BlockType t);
+
 	float* GetVertexData() { return (float*)(m_vertices.data()); }
 	uint* GetIndexData() { return m_indices.data(); }
 	uint GetVertexCount() { return m_vertexCount; }
@@ -39,6 +41,9 @@ public:
 
 private:
 	void Generate(const glm::vec3& chunkPos);
+
+	void GenerateMeshInt();
+	void GenerateGreedyMeshInt();
 
 	// could be a rle instead of 3d array? https://0fps.net/2012/01/14/an-analysis-of-minecraft-like-engines/
 	// hard to tell whats better

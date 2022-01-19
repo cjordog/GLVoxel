@@ -11,6 +11,13 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 		RenderSettings::DrawMode newMode = renderSettings.m_drawMode == RenderSettings::DrawMode::Wireframe ? RenderSettings::DrawMode::Triangles : RenderSettings::DrawMode::Wireframe;
 		renderSettings.m_drawMode = RenderSettings::DrawMode(newMode);
 	}
+
+	if (key == GLFW_KEY_G && action == GLFW_PRESS)
+	{
+		RenderSettings& renderSettings = RenderSettings::Get();
+		renderSettings.greedyMesh = !renderSettings.greedyMesh;
+		renderSettings.deleteMesh = true;
+	}
 }
 
 Input::Input(Window* w)

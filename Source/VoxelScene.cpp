@@ -36,6 +36,16 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 
 void VoxelScene::Update(const glm::vec3& position)
 {
+	if (RenderSettings::Get().deleteMesh)
+	{
+		for (auto& chunk : m_chunks)
+		{
+			delete chunk.second;
+		}
+		m_chunks.clear();
+		RenderSettings::Get().deleteMesh = false;
+	}
+
 	std::unordered_set<Chunk*> generateMeshList;
 	// update in concentric circles outwards from position
 	for (int i = 0; i <= RENDER_DISTANCE; i++)
@@ -118,6 +128,7 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 		glm::vec3(0, -1, 1),
 		glm::vec3(0, -1, -1),
 	};
+	m_chunks.clear();
 	for (auto pos : poss)
 	{
 		glm::i32vec3 chunkPos = glm::i32vec3(pos);

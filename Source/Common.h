@@ -40,20 +40,20 @@ struct Vertex
 
 enum BlockFace : uint8_t
 {
-	Front = 0,	// +z
-	Back,		// -z
-	Right,		// +x
+	Right = 0,	// +x
 	Left,		// -x
 	Top,		// +y
 	Bottom,		// -y
+	Front,		// +z
+	Back,		// -z
 	NumFaces
 };
 
 const static glm::vec3 s_blockNormals[BlockFace::NumFaces] = {
-	{ 0, 0, 1 },	// Front 
-	{ 0, 0, -1 },	// Back
 	{ 1, 0, 0 },	// Right
 	{ -1, 0, 0 },	// Left
 	{ 0, 1, 0 },	// Top
-	{ 0, -1, 0 }	// Bottom
+	{ 0, -1, 0 },	// Bottom
+	{ 0, 0, 1 },	// Front 
+	{ 0, 0, -1 },	// Back
 };
