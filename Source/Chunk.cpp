@@ -249,7 +249,7 @@ void Chunk::GenerateMeshInt()
 // adopted from https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/
 void Chunk::GenerateGreedyMeshInt()
 {
-	// sweep over each axis
+	// sweep over each axis, generate forward and backward facing planes in one iteration
 	for (int dim = 0; dim < 3; dim++)
 	{
 		// u,v indices of other two dimensions that were not sweeping
@@ -258,10 +258,10 @@ void Chunk::GenerateGreedyMeshInt()
 
 		// x is scratch pad for position of the block were currently processing.
 		glm::i32vec3 x(0, 0, 0);
-		// direction were sweeping in
 		glm::i32vec3 sweepDir(0, 0, 0);
 		sweepDir[dim] = 1;
 
+		// mask contains values of current slices neighboring voxel information
 		uint8_t mask[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { 0 };
 
 		// sweep over current dimension
@@ -269,7 +269,6 @@ void Chunk::GenerateGreedyMeshInt()
 		{
 			int n = 0;
 			// setup mask
-			// these can just be i,j, doesnt need to be x
 			for (x[v] = 0; x[v] < CHUNK_VOXEL_SIZE; x[v]++)
 			{
 				for (x[u] = 0; x[u] < CHUNK_VOXEL_SIZE; x[u]++)
@@ -291,12 +290,15 @@ void Chunk::GenerateGreedyMeshInt()
 
 			x[dim]++;
 
+			// evaluate mask and generate faces as large as possible
 			for (int i = 0; i < CHUNK_VOXEL_SIZE; i++)
 			{
 				for (int j = 0; j < CHUNK_VOXEL_SIZE; )
 				{
+					//TODO:: check block type (maybe incorporate into mask)
 					if (int maskVal = mask[i][j])
 					{
+						// find largest rect of same maskVal
 						int w = 1, h = 1;
 						while (j + w < CHUNK_VOXEL_SIZE && mask[i][j + w] == maskVal)
 						{
@@ -318,6 +320,7 @@ void Chunk::GenerateGreedyMeshInt()
 							h++;
 						}
 
+						// generate face from found rect
 						x[u] = j;
 						x[v] = i;
 
@@ -326,24 +329,26 @@ void Chunk::GenerateGreedyMeshInt()
 						glm::i32vec3 dv(0, 0, 0);
 						dv[v] = h;
 
-						glm::vec3 vertices[4] = {
-							{x[0], x[1], x[2]},
-							{x[0] + du[0], x[1] + du[1], x[2] + du[2] },
-							{x[0] + du[0] + dv[0], x[1] + du[1] + dv[1], x[2] + du[2] + dv[2]},
-							{x[0] + dv[0], x[1] + dv[1], x[2] + dv[2]},
+						glm::vec3 vertices[4] = 
+						{
+							{x[0],					x[1],					x[2]},
+							{x[0] + du[0],			x[1] + du[1],			x[2] + du[2]},
+							{x[0] + du[0] + dv[0],	x[1] + du[1] + dv[1],	x[2] + du[2] + dv[2]},
+							{x[0] + dv[0],			x[1] + dv[1],			x[2] + dv[2]},
 						};
 
-						uint indices[6] = {
+						// faces with maskVal 1 points in positive normal, 2 is negative, so have both windings
+						static constexpr uint indices[2][6] = 
+						{
+							{
+								0, 1, 3,
+								1, 2, 3
+							},
+							{
 								0, 3, 1,
 								1, 3, 2
+							},
 						};
-						if (maskVal == 1)
-						{ 
-							indices[1] = 1;
-							indices[2] = 3;
-							indices[4] = 2;
-							indices[5] = 3;
-						}
 
 						glm::vec3 normal = sweepDir;
 						if (maskVal == 2)
@@ -356,10 +361,11 @@ void Chunk::GenerateGreedyMeshInt()
 						}
 						for (uint m = 0; m < 6; m++)
 						{
-							m_indices.push_back(indices[m] + m_vertexCount);
+							m_indices.push_back(indices[maskVal - 1][m] + m_vertexCount);
 						}
 						m_indexCount += 6;
 						m_vertexCount += 4;
+
 						//Zero-out mask
 						for (int l = 0; l < h; ++l)
 						{
