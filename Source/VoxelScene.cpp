@@ -11,7 +11,7 @@
 
 ShaderProgram VoxelScene::s_shaderProgram;
 
-const uint RENDER_DISTANCE = 5;
+const uint RENDER_DISTANCE = 10;
 
 VoxelScene::VoxelScene()
 {

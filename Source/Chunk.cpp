@@ -279,6 +279,7 @@ void Chunk::GenerateGreedyMeshInt()
 			{
 				for (x[u] = 0; x[u] < CHUNK_VOXEL_SIZE; x[u]++)
 				{
+					// find block type of current block and the neighbor block in the direction were searching
 					BlockType t1 = BlockType::Air;
 					BlockType t2 = BlockType::Air;
 					if (x[dim] >= 0)

@@ -13,6 +13,11 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
+#ifdef DEBUG
+#include "imgui_impl_opengl3.h"
+#include "imgui_impl_glfw.h"
+#endif
+
 ShaderProgram World::shaderProgram1;
 
 static float vertices[] = {
@@ -76,6 +81,13 @@ void World::Render()
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
+#ifdef DEBUG
+	// feed inputs to dear imgui, start new frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+#endif
+
 	//shaderProgram1.Use();
 
 	//glBindVertexArray(VAO);
@@ -102,6 +114,17 @@ void World::Render()
 	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
 	m_voxelScene.Render(&m_camera);
+
+#ifdef DEBUG
+	// render your GUI
+	ImGui::Begin("Demo window");
+	ImGui::Button("Hello!");
+	ImGui::End();
+
+	// Render dear imgui into screen
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+#endif
 }
 
 void World::Update(float updateTime, InputData* inputData)

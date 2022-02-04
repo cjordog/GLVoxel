@@ -16,6 +16,7 @@ target_include_directories(${PROJECT_NAME}
 	PUBLIC 
 		"imgui/" 
 		"imgui/examples/" 
+		"imgui/backends/" 
 )
 
 target_include_directories(imgui

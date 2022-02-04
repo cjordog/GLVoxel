@@ -7,6 +7,11 @@
 #include <chrono>
 #include <iostream>
 
+#ifdef DEBUG
+#include "imgui_impl_opengl3.h"
+#include "imgui_impl_glfw.h"
+#endif
+
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -27,6 +32,19 @@ int main()
 	World world;
 	World::InitShared();
 	world.Init();
+
+#ifdef DEBUG
+	// Setup Dear ImGui context
+	IMGUI_CHECKVERSION();
+	ImGui::CreateContext();
+	ImGuiIO& io = ImGui::GetIO();
+	// Setup Platform/Renderer bindings
+	ImGui_ImplGlfw_InitForOpenGL(window.GetGLFWWindow(), true);
+	const char* glsl_version = "#version 460";
+	ImGui_ImplOpenGL3_Init(glsl_version);
+	// Setup Dear ImGui style
+	ImGui::StyleColorsDark();
+#endif
 
 	auto lastFrameTime = std::chrono::high_resolution_clock::now();
 

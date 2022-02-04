@@ -5,6 +5,7 @@
 - block types
 - all things rendering
 - greedy meshing?
+- switch to rle?
 - compute or geo shader for voxel generation?
 - threading
 - use profiler for checking cache misses
