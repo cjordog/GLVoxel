@@ -26,6 +26,8 @@ struct InputData
 		m_mouseButtons = glm::vec2(0.0f);
 	}
 
+	bool m_disableMouseLook = false;
+
 	glm::vec3 m_moveInput = glm::vec3(0.0f);
 	glm::vec2 m_mouseInput = glm::vec2(0.0f);
 	glm::vec2 m_mouseButtons = glm::vec2(0.0f);

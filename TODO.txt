@@ -11,3 +11,4 @@
 - use profiler for checking cache misses
 - skybox rendering
 - LODing? depends on approach
+- separate update and render into threads

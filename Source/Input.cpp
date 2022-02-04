@@ -49,6 +49,21 @@ void Input::ProcessInput()
 	if (glfwGetKey(glfwWin, GLFW_KEY_Z) == GLFW_PRESS)
 		m_inputData.m_moveInput.y -= 1.0f;
 
+#ifdef DEBUG
+	//probably could be set once on press and release
+	if (glfwGetKey(glfwWin, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) 
+	{
+		m_inputData.m_disableMouseLook = true;
+		glfwSetInputMode(glfwWin, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
+	}
+	else
+	{
+		m_inputData.m_disableMouseLook = false;
+		glfwSetInputMode(glfwWin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+	}
+#endif
+		
+
 	double xpos, ypos;
 	glfwGetCursorPos(glfwWin, &xpos, &ypos);
 	

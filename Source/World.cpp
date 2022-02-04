@@ -18,6 +18,8 @@
 #include "imgui_impl_glfw.h"
 #endif
 
+const int FRAMERATE_AVG_PERIOD = 30;
+
 ShaderProgram World::shaderProgram1;
 
 static float vertices[] = {
@@ -60,8 +62,8 @@ bool World::Init()
 	//glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
 	//glEnableVertexAttribArray(2);
 
-	testTex1 = LoadTexture("uv-test.png", PNG);
-	testTex2 = LoadTexture("woodbox.jpg", JPG);
+	testTex1 = LoadTexture("uv-test.png", ImageFormat::PNG);
+	testTex2 = LoadTexture("woodbox.jpg", ImageFormat::JPG);
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
@@ -118,7 +120,9 @@ void World::Render()
 #ifdef DEBUG
 	// render your GUI
 	ImGui::Begin("Demo window");
-	ImGui::Button("Hello!");
+	ImGui::Text("Framerate: %d", m_frameRate);
+	glm::vec3 cameraPos = m_camera.GetPosition();
+	ImGui::Text("Position x:%f y:%f z:%f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::End();
 
 	// Render dear imgui into screen
@@ -129,9 +133,19 @@ void World::Render()
 
 void World::Update(float updateTime, InputData* inputData)
 {
-	// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-	m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+	if (!inputData->m_disableMouseLook)
+	{
+		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
+		m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+	}
 	m_voxelScene.Update(m_camera.GetPosition());
+
+	m_frameTimes.push_back(updateTime);
+	if (m_frameTimes.size() > FRAMERATE_AVG_PERIOD)
+	{
+		m_frameTimes.pop_front();
+	}
+	CalcFrameRate();
 }
 
 uint World::LoadTexture(const char* image, ImageFormat fmt)
@@ -157,10 +171,10 @@ uint World::LoadTexture(const char* image, ImageFormat fmt)
 	{
 		switch (fmt)
 		{
-			case PNG:
+			case ImageFormat::PNG:
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGBA, GL_UNSIGNED_BYTE, data);
 				break;
-			case JPG:
+			case ImageFormat::JPG:
 				glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data);
 				break;
 			default:
@@ -174,4 +188,16 @@ uint World::LoadTexture(const char* image, ImageFormat fmt)
 	}
 	stbi_image_free(data);
 	return texture;
+}
+
+uint World::CalcFrameRate()
+{
+	float sum = 0;
+	for (float val : m_frameTimes)
+	{
+		sum += val;
+	}
+	sum /= m_frameTimes.size();
+	m_frameRate = uint(1000.0f / sum);
+	return m_frameRate;
 }
