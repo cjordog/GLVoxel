@@ -62,9 +62,11 @@ int main()
 		input.Poll();
 	}
 
+#ifdef DEBUG
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
+#endif
 
 	glfwTerminate();
 	return 0;

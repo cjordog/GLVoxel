@@ -37,6 +37,7 @@ static uint indices[] = {
 
 World::World()
 	: m_camera(glm::vec3(0, 0, -10), 0, 90.0f),
+	m_frozenCamera(glm::vec3(0, 0, -10), 0, 90.0f),
 	m_voxelScene()
 {
 
@@ -115,7 +116,7 @@ void World::Render()
 	//glBindVertexArray(VAO);
 	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
 
-	m_voxelScene.Render(&m_camera);
+	m_voxelScene.Render(&m_camera, &m_frozenCamera);
 
 #ifdef DEBUG
 	// render your GUI
@@ -123,6 +124,8 @@ void World::Render()
 	ImGui::Text("Framerate: %d", m_frameRate);
 	glm::vec3 cameraPos = m_camera.GetPosition();
 	ImGui::Text("Position x:%f y:%f z:%f", cameraPos.x, cameraPos.y, cameraPos.z);
+	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
+	//ImGui::ShowDemoWindow();
 	ImGui::End();
 
 	// Render dear imgui into screen
@@ -133,6 +136,7 @@ void World::Render()
 
 void World::Update(float updateTime, InputData* inputData)
 {
+	m_camera.FrameStart();
 	if (!inputData->m_disableMouseLook)
 	{
 		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
@@ -145,6 +149,14 @@ void World::Update(float updateTime, InputData* inputData)
 	{
 		m_frameTimes.pop_front();
 	}
+
+	m_camera.CalculateFrustum();
+
+	if (!m_freezeCamera)
+	{
+		m_frozenCamera = m_camera;
+	}
+
 	CalcFrameRate();
 }
 

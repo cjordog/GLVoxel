@@ -20,7 +20,7 @@ public:
 	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
 	void Update(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
-	void Render(Camera* camera);
+	void Render(const Camera* camera, const Camera* debugCullCamera);
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
 

@@ -33,10 +33,13 @@ private:
 	uint testTex1 = 0, testTex2 = 0;
 
 	Camera m_camera;
+	Camera m_frozenCamera;
 
 	VoxelScene m_voxelScene;
 
 	// this should be averaged over time, not frames
 	std::deque<float> m_frameTimes;
 	uint m_frameRate = 0;
+
+	bool m_freezeCamera = false;
 };

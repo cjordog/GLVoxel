@@ -37,6 +37,8 @@ public:
 
 	void GenerateMesh();
 
+	bool IsInFrustum(Frustum f, glm::mat4 modelMat) const;
+
 	const glm::vec3 m_chunkPos;
 
 private:
@@ -54,6 +56,8 @@ private:
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	const Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
+
+	AABB m_AABB;
 	
 	uint m_vertexCount = 0;
 	uint m_indexCount = 0;

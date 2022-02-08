@@ -42,6 +42,12 @@
 		- It is illegal to assign the same uniform location to two uniforms in the same shader or the same program
 			- vertex attributes are not included in this, they use separate locations
 
+- GLAD
+	- function loader for opengl
+
+- GLFW
+	- window manager for opengl
+
 Coordinate systems
 	- local space -> model(world) matrix
 	- world space -> view matrix
@@ -49,3 +55,4 @@ Coordinate systems
 	- clip space (-1 to 1) (Normalized Device Coordinates) -> viewport transform (defined by glViewPort)
 	- screen space (0 to 1)
 	- opengl uses right handed coords, y-up, -z forward
+		- uses left handed after switching to NDC, proj matrix switches z dir, and handedness

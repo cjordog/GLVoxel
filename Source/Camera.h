@@ -12,15 +12,37 @@ public:
 	Camera(glm::vec3 pos, float pitch, float yaw);
 
 	void Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta);
-	glm::mat4 GetViewMatrix() { return m_viewMatrix; }
-	const glm::vec3 GetPosition() { return m_position; }
+	void CalculateFrustum();
+
+	const glm::mat4& GetViewMatrix() const { return m_viewMatrix; }
+	const glm::vec3& GetPosition() const { return m_position; }
+	float GetAspectRatio() const { return m_aspectRatio; }
+	float GetFovX() const { return m_fovX; }
+	float GetFovY() const { return m_fovX / m_aspectRatio; }
+	float GetNearClip() const { return m_nearClip; }
+	float GetFarClip() const { return m_farClip; }
+	const Frustum& GetFrustum() const { return m_frustum; }
+
+	void FrameStart();
 
 private:
 	glm::vec3 m_position;
 	glm::mat4 m_viewMatrix;
+	Frustum m_frustum;
+
 	float m_pitch = 0.0f;
 	float m_yaw = 90.0f;
+	glm::vec3 m_forward;
+	glm::vec3 m_right;
+	glm::vec3 m_up;
 
 	float m_aspectRatio = 4.0f / 3.0f;
-	float m_fov = 80.0f;
+	float m_fovX = glm::radians(90.0f);
+	float m_nearClip = 0.1f;
+	float m_farClip = 10000.f;
+
+	float m_halfVSide = 0;
+	float m_halfHSide = 0;
+
+	bool m_movedThisFrame = true;
 };

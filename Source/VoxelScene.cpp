@@ -183,10 +183,10 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 	}
 }
 
-void VoxelScene::Render(Camera* camera)
+void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 {
 	s_shaderProgram.Use();
-	glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.f);
+	glm::mat4 Projection = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
 	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(Projection));
 
 	RenderSettings::DrawMode drawMode = RenderSettings::Get().m_drawMode;
@@ -203,9 +203,11 @@ void VoxelScene::Render(Camera* camera)
 			continue;
 
 		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunkPos) * float(CHUNK_UNIT_SIZE));
-		glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
-
-		chunk->Render(drawMode);
+		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), Model))
+		{
+			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
+			chunk->Render(drawMode);
+		}
 	}
 }
 

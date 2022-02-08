@@ -4,7 +4,8 @@
 #include "glm/gtc/noise.hpp"
 
 Chunk::Chunk(const glm::vec3& chunkPos)
-	: m_chunkPos(chunkPos)
+	: m_chunkPos(chunkPos),
+	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE))
 {
 	Generate(chunkPos);
 
@@ -177,6 +178,11 @@ void Chunk::GenerateMesh()
 	}
 
 	m_meshGenerated = 1;
+}
+
+bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
+{
+	return m_AABB.IsInFrustum(f, modelMat);
 }
 
 void Chunk::GenerateMeshInt()
