@@ -18,22 +18,7 @@
 #include "imgui_impl_glfw.h"
 #endif
 
-const int FRAMERATE_AVG_PERIOD = 30;
-
 ShaderProgram World::shaderProgram1;
-
-static float vertices[] = {
-	// positions          // colors           // texture coords
-	 0.5f,  0.5f, 0.0f,   1.0f, 0.0f, 0.0f,   1.0f, 1.0f,   // top right
-	 0.5f, -0.5f, 0.0f,   0.0f, 1.0f, 0.0f,   1.0f, 0.0f,   // bottom right
-	-0.5f, -0.5f, 0.0f,   0.0f, 0.0f, 1.0f,   0.0f, 0.0f,   // bottom left
-	-0.5f,  0.5f, 0.0f,   1.0f, 1.0f, 0.0f,   0.0f, 1.0f    // top left 
-};
-
-static uint indices[] = {
-	0, 1, 3, // first triangle
-	1, 2, 3  // second triangle
-};
 
 World::World()
 	: m_camera(glm::vec3(0, 0, -10), 0, 90.0f),
@@ -45,24 +30,6 @@ World::World()
 
 bool World::Init()
 {
-	//glGenVertexArrays(1, &VAO);
-	//glGenBuffers(1, &VBO);
-	//glGenBuffers(1, &EBO);
-
-	//glBindVertexArray(VAO);
-	//glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	//glBufferData(GL_ARRAY_BUFFER, sizeof(vertices), vertices, GL_STATIC_DRAW);
-
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-	//glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(indices), indices, GL_STATIC_DRAW);
-
-	//glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)0);
-	//glEnableVertexAttribArray(0);
-	//glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(3 * sizeof(float)));
-	//glEnableVertexAttribArray(1);
-	//glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 8 * sizeof(float), (void*)(6 * sizeof(float)));
-	//glEnableVertexAttribArray(2);
-
 	testTex1 = LoadTexture("uv-test.png", ImageFormat::PNG);
 	testTex2 = LoadTexture("woodbox.jpg", ImageFormat::JPG);
 
@@ -85,10 +52,7 @@ void World::Render()
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
 #ifdef DEBUG
-	// feed inputs to dear imgui, start new frame
-	ImGui_ImplOpenGL3_NewFrame();
-	ImGui_ImplGlfw_NewFrame();
-	ImGui::NewFrame();
+	ImGuiBeginRender();
 #endif
 
 	//shaderProgram1.Use();
@@ -119,45 +83,15 @@ void World::Render()
 	m_voxelScene.Render(&m_camera, &m_frozenCamera);
 
 #ifdef DEBUG
-	// render your GUI
-	ImGui::Begin("Demo window");
-	ImGui::Text("Framerate: %d", m_frameRate);
-	glm::vec3 cameraPos = m_camera.GetPosition();
-	ImGui::Text("Position x:%f y:%f z:%f", cameraPos.x, cameraPos.y, cameraPos.z);
-	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
-	//ImGui::ShowDemoWindow();
-	ImGui::End();
-
-	// Render dear imgui into screen
-	ImGui::Render();
-	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+	ImGuiRender();
 #endif
 }
 
 void World::Update(float updateTime, InputData* inputData)
 {
-	m_camera.FrameStart();
-	if (!inputData->m_disableMouseLook)
-	{
-		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-		m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
-	}
+	UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_camera.GetPosition());
-
-	m_frameTimes.push_back(updateTime);
-	if (m_frameTimes.size() > FRAMERATE_AVG_PERIOD)
-	{
-		m_frameTimes.pop_front();
-	}
-
-	m_camera.CalculateFrustum();
-
-	if (!m_freezeCamera)
-	{
-		m_frozenCamera = m_camera;
-	}
-
-	CalcFrameRate();
+	CalcFrameRate(updateTime);
 }
 
 uint World::LoadTexture(const char* image, ImageFormat fmt)
@@ -202,14 +136,61 @@ uint World::LoadTexture(const char* image, ImageFormat fmt)
 	return texture;
 }
 
-uint World::CalcFrameRate()
+constexpr float FRAMERATE_MS = 1000.0f;
+uint World::CalcFrameRate(float frameTime)
 {
-	float sum = 0;
-	for (float val : m_frameTimes)
+	m_frameTimes.push_back(frameTime);
+	m_frameTimeTotal += frameTime;
+
+	while (m_frameTimeTotal > FRAMERATE_MS)
 	{
-		sum += val;
+		m_frameTimeTotal -= m_frameTimes.front();
+		m_frameTimes.pop_front();
 	}
-	sum /= m_frameTimes.size();
-	m_frameRate = uint(1000.0f / sum);
+
+	m_frameRate = uint(m_frameTimes.size() / FRAMERATE_MS * 1000.f);
 	return m_frameRate;
 }
+
+void World::UpdateCamera(float updateTime, InputData* inputData)
+{
+	m_camera.FrameStart();
+	if (!inputData->m_disableMouseLook)
+	{
+		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
+		m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+	}
+
+	m_camera.CalculateFrustum();
+
+	if (!m_freezeCamera)
+	{
+		m_frozenCamera = m_camera;
+	}
+}
+
+#ifdef DEBUG
+void World::ImGuiBeginRender()
+{
+	// feed inputs to dear imgui, start new frame
+	ImGui_ImplOpenGL3_NewFrame();
+	ImGui_ImplGlfw_NewFrame();
+	ImGui::NewFrame();
+}
+
+void World::ImGuiRender()
+{
+	// render your GUI
+	ImGui::Begin("Demo window");
+	ImGui::Text("Framerate: %d", m_frameRate);
+	glm::vec3 cameraPos = m_camera.GetPosition();
+	ImGui::Text("Position x:%f y:%f z:%f", cameraPos.x, cameraPos.y, cameraPos.z);
+	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
+	//ImGui::ShowDemoWindow();
+	ImGui::End();
+
+	// Render dear imgui into screen
+	ImGui::Render();
+	ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+}
+#endif

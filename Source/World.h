@@ -23,7 +23,12 @@ public:
 	uint LoadTexture(const char* image, ImageFormat fmt);
 
 private:
-	uint CalcFrameRate();
+	uint CalcFrameRate(float frameTime);
+	void UpdateCamera(float updateTime, InputData* inputData);
+#ifdef DEBUG
+	void ImGuiBeginRender();
+	void ImGuiRender();
+#endif
 
 	static ShaderProgram shaderProgram1;
 	uint VAO = 0;
@@ -37,8 +42,8 @@ private:
 
 	VoxelScene m_voxelScene;
 
-	// this should be averaged over time, not frames
 	std::deque<float> m_frameTimes;
+	float m_frameTimeTotal = 0;
 	uint m_frameRate = 0;
 
 	bool m_freezeCamera = false;
