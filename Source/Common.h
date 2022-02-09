@@ -82,6 +82,11 @@ struct Plane
 	}
 };
 
+enum WorldFlags
+{
+	EnableMT = 0x00000001,
+};
+
 struct Frustum
 {
 	Plane topFace;

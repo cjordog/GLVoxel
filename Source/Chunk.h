@@ -68,6 +68,7 @@ private:
 
 	uint m_generated		: 1 = 0;
 	uint m_meshGenerated	: 1 = 0;
+	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
 };

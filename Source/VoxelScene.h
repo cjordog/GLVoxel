@@ -1,6 +1,9 @@
 #pragma once
 
 #include <unordered_map>
+#include <unordered_set>
+#include <mutex>
+#include <thread>
 
 #include "glm/vec3.hpp"
 #include "Common.h"
@@ -20,15 +23,22 @@ public:
 	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
 	void Update(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
+	void GenerateMeshes();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
 
-
 private:
-
-	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
-
+	struct ChunkWrapper
+	{
+		Chunk* chunk;
+		std::mutex lock;
+	};
+	std::unordered_map<glm::i32vec3, ChunkWrapper> m_chunks;
+	std::unordered_set<Chunk*> m_generateMeshList;
 
 	static ShaderProgram s_shaderProgram;
+
+	std::thread m_thread;
+	std::mutex m_mutex;
 };

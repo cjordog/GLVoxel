@@ -25,7 +25,7 @@ World::World()
 	m_frozenCamera(glm::vec3(0, 0, -10), 0, 90.0f),
 	m_voxelScene()
 {
-
+	m_flags |= WorldFlags::EnableMT;
 }
 
 bool World::Init()

@@ -47,4 +47,6 @@ private:
 	uint m_frameRate = 0;
 
 	bool m_freezeCamera = false;
+
+	uint m_flags = 0;
 };
