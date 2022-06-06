@@ -25,6 +25,7 @@ public:
 	void TestUpdate(const glm::vec3& position);
 	void GenerateMeshes();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
+	inline void NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace side, BlockFace oppositeSide);
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
 

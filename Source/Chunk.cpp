@@ -80,6 +80,7 @@ void Chunk::Render(RenderSettings::DrawMode drawMode) const
 	if (!m_meshGenerated)
 		return;
 
+	//maybe shouldnt be in render?
 	if (!m_buffersGenerated)
 	{
 		glBindVertexArray(m_VAO);
@@ -434,6 +435,5 @@ void Chunk::GenerateGreedyMeshInt()
 int Chunk::ConvertDirToNeighborIndex(const glm::vec3& dir)
 {
 	// idk if this is faster than just an if statement but its cool
-	//return (0.5f - 0.5f * dir.x) * abs(dir.x) + (2.5f - 0.5f * dir.y) * abs(dir.y) + (4.5f - 0.5f * dir.z) * abs(dir.z);
 	return glm::dot(glm::abs(dir), glm::vec3(0.5f, 2.5f, 4.5f) - 0.5f * dir);
 }
