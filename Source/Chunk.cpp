@@ -7,7 +7,6 @@ Chunk::Chunk(const glm::vec3& chunkPos)
 	: m_chunkPos(chunkPos),
 	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE))
 {
-	Generate(chunkPos);
 
 	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
@@ -104,42 +103,56 @@ void Chunk::Render(RenderSettings::DrawMode drawMode) const
 	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);
 }
 
-bool Chunk::UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces])
-{
-	bool updated = false;
-
-	for (uint i = 0; i < BlockFace::NumFaces; i++)
-	{
-		if (neighbors[i] != m_neighbors[i])
-		{
-			updated = true;
-			m_neighbors[i] = neighbors[i];
-		}
-	}
-
-	return updated;
-}
+//bool Chunk::UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces])
+//{
+//	bool updated = false;
+//
+//	for (uint i = 0; i < BlockFace::NumFaces; i++)
+//	{
+//		if (neighbors[i] != m_neighbors[i])
+//		{
+//			updated = true;
+//			m_neighbors[i] = neighbors[i];
+//		}
+//	}
+//
+//	return updated;
+//}
 
 bool Chunk::UpdateNeighborRef(BlockFace face, const Chunk* neighbor)
 {
+	std::lock_guard lock(m_mutex);
 	if (m_neighbors[face] != neighbor)
 	{
 		m_neighbors[face] = neighbor;
-		return true;
+		m_neighborCollectedMask |= 1u << face; // if we unload a chunk, we might not want this to be an |=
+		if (neighbor->m_generated)
+			m_neighborGeneratedMask |= 1u << face;
+		if (m_neighborCollectedMask == 0b00111111 && m_state == ChunkState::CollectingNeighborRefs)	// might not want to check state here if we unload and reload a chunk?
+		{
+			m_state = ChunkState::GeneratingMesh; // need to make sure all neighbors have generated volumes
+			return true;
+		}
 	}
 	return false;
 }
 
-void Chunk::Generate(const glm::vec3& chunkPos)
+void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace face)
 {
+	m_neighborGeneratedMask |= 1u << face;
+}
+
+void Chunk::GenerateVolume()
+{
+	// does this not need to be locked? how does it work when two threads try to write two different variables on the same object. nvm this is fine.
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
 		{
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				if (y / float(UNIT_VOXEL_RESOLUTION) + chunkPos.y * float(CHUNK_UNIT_SIZE) >
-					glm::perlin((glm::vec2(chunkPos.x, chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 57.f) * 20.f)
+				if (y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * float(CHUNK_UNIT_SIZE) >
+					glm::perlin((glm::vec2(m_chunkPos.x, m_chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 57.f) * 20.f)
 				{
 					m_voxels[x][y][z] = BlockType::Air;
 				}
@@ -151,6 +164,7 @@ void Chunk::Generate(const glm::vec3& chunkPos)
 			}
 		}
 	}
+	m_state = ChunkState::CollectingNeighborRefs;
 	m_generated = 1;
 }
 
@@ -222,7 +236,8 @@ void Chunk::GenerateMeshInt()
 							// compare with neighboring chunk, if it exists
 							if (const Chunk* neighborChunk = m_neighbors[i])
 							{
-								//if (i == 0)
+								// TODO :: consolidate these in the outer loop? maybe lock once at start and cache all data needed.
+								std::lock_guard lock(neighborChunk->m_mutex); // this might be real slow...
 								if (neighborChunk->m_generated &&
 									!neighborChunk->IsEmpty())
 								{

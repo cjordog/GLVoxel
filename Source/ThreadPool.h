@@ -6,11 +6,13 @@
 #include <thread>
 #include <functional>
 
-enum class JobPriority
+enum JobPriority : unsigned
 {
-	Priority_Low = 0,
+	Priority_Min = 0,
+	Priority_Low,
 	Priority_Med,
 	Priority_High,
+	Priority_Max,
 
 	Num_Priorities,
 };
@@ -57,7 +59,7 @@ public:
 	template<typename FunctionType>
 	void Submit(FunctionType t, JobPriority prio)
 	{
-		m_workQueue.push({ jobCount++, std::function<void()>(f), prio });
+		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
 	}
 
 private:
@@ -82,3 +84,5 @@ private:
 		}
 	}
 };
+
+//ThreadPool g_threadPool;

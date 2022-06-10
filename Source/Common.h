@@ -54,6 +54,16 @@ enum BlockFace : uint8_t
 	NumFaces
 };
 
+const static BlockFace s_opposingBlockFaces[BlockFace::NumFaces]
+{
+	BlockFace::Left,
+	BlockFace::Right,
+	BlockFace::Bottom,
+	BlockFace::Top,
+	BlockFace::Back,
+	BlockFace::Front
+};
+
 const static glm::vec3 s_blockNormals[BlockFace::NumFaces] = {
 	{ 1, 0, 0 },	// Right
 	{ -1, 0, 0 },	// Left

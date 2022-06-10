@@ -39,8 +39,7 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 {
 	if (Chunk* neighbor = m_chunks[pos + glm::i32vec3(s_blockNormals[side])].chunk)
 	{
-		if (neighbor->UpdateNeighborRef(oppositeSide, chunk))
-			m_generateMeshList.emplace(neighbor);
+		neighbor->UpdateNeighborRef(oppositeSide, chunk);
 		chunk->UpdateNeighborRef(side, neighbor);
 	}
 }
@@ -59,6 +58,9 @@ void VoxelScene::Update(const glm::vec3& position)
 	}
 
 	// update in concentric circles outwards from position
+	// TODO:: this is dumb. could have this start at some low value and grow greater over frames. could even scale dynamically with how much work is in job pool.
+	// because we dont actually need this to grow every update, especially on small movements. get rid of outer loop altogether
+	// TODO:: dont need to run this every frame. lots of wasted work. need to do checks to see if anything has changed that would cause us to need to call this update.
 	for (int i = 0; i <= RENDER_DISTANCE; i++)
 	{
 		//uint updateDiameter = i * 2 + 1;
@@ -76,15 +78,21 @@ void VoxelScene::Update(const glm::vec3& position)
 
 						if (newChunk)
 						{
-							m_generateMeshList.emplace(newChunk);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Front, BlockFace::Back);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Back, BlockFace::Front);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Right, BlockFace::Left);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Left, BlockFace::Right);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Top, BlockFace::Bottom);
+							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Bottom, BlockFace::Top);
 
 							// notify neighbors
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Front, BlockFace::Back);
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Back, BlockFace::Front);
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Right, BlockFace::Left);
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Left, BlockFace::Right);
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Top, BlockFace::Bottom);
-							NotifyNeighbor(newChunk, chunkPos, BlockFace::Bottom, BlockFace::Top);
+							for (uint m = 0; m < BlockFace::NumFaces; m++)
+							{
+								NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
+								// note to self: reads to neighbor ptrs need to be locked. 
+							}
+							m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
+							m_generateMeshList.emplace(newChunk);
 						}
 					}
 				}

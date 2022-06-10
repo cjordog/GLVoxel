@@ -2,6 +2,7 @@
 
 #include "stdint.h"
 #include <vector>
+#include <mutex>
 
 #include "Common.h"
 #include "RenderSettings.h"
@@ -19,6 +20,16 @@ public:
 		Stone,
 	};
 
+	enum class ChunkState
+	{
+		BrandNew,
+		GeneratingVolume,
+		CollectingNeighborRefs,
+		GeneratingMesh,
+		GeneratingBuffers,
+		Done
+	};
+
 	bool BlockIsOpaque(BlockType t);
 
 	float* GetVertexData() { return (float*)(m_vertices.data()); }
@@ -34,15 +45,18 @@ public:
 	void Render(RenderSettings::DrawMode drawMode) const;
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);
 	bool UpdateNeighborRef(BlockFace face, const Chunk* neighbor);
+	void NotifyNeighborOfVolumeGeneration(BlockFace face);
 
+	void GenerateVolume();
 	void GenerateMesh();
 
 	bool IsInFrustum(Frustum f, glm::mat4 modelMat) const;
 
 	const glm::vec3 m_chunkPos;
 
+	std::mutex m_mutex;
+
 private:
-	void Generate(const glm::vec3& chunkPos);
 
 	void GenerateMeshInt();
 	void GenerateGreedyMeshInt();
@@ -56,6 +70,8 @@ private:
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	const Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
+	uint8_t m_neighborCollectedMask = 0;
+	uint8_t m_neighborGeneratedMask = 0;
 
 	AABB m_AABB;
 	
@@ -65,6 +81,8 @@ private:
 	uint m_VBO = 0;
 	uint m_EBO = 0;
 	uint m_VAO = 0;
+
+	ChunkState m_state = ChunkState::BrandNew;
 
 	uint m_generated		: 1 = 0;
 	uint m_meshGenerated	: 1 = 0;

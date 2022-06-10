@@ -1,0 +1,94 @@
+c++ concurrency notes
+
+c++ concurrency in action 
+
+initialize thread with function call
+	- std::thread t(hello);
+	- t.join()
+		- stalls calling thread waiting for t to finish up
+		- can call join only once
+		- need to call join when exceptions happen, since program will exit
+			- or use something like RAII (resource acquisition is initialization)
+	- can pass any callable type, this includes classes with overloaded operator
+	- be careful when initializing this with temp instead of named variables
+		- std::thread my_thread(background_task());
+			- can create a function declaration instead of thread, use {} instead of (), or a named variable, or a lambda
+	- make sure threads are either terminated or joined before program ends
+	- alternate to calling join is calling detach(). detaches the thread from the thread object. thread object can be destroyed. just be careful about referencing local variables or anything that can have dangling references by the time the calling thread exits the function call
+		- detached threads are no longer communicable. called daemon threads
+	- function arguments are additional arguments to thread constructor
+		- copies all arguments, regardless of if theyre references!!! (2.2)
+		- either use std::ref(param), or a pointer instead
+		- can pass member function pointer as first arg if second arg is a suitable object pointer for first arg
+	- threads can be moved, but not copied
+
+number of threads
+	unsigned long const hardware_threads = std::thread::hardware_concurrency();
+	unsigned long const num_threads = std::min(hardware_threads!=0?hardware_threads:2,max_threads);
+
+	dont want to oversubscribe, context switching with more threads than we support will decrease perf
+
+thread id
+	- get_id(), unique id per thread
+
+sharing data
+	- if all data is read only, theres no problem.
+	- first option: locking
+		- mutex (mutual exclusivity)
+			- better to use std::lock_guard instead of calling lock and unlock from every exit point manually
+				- locks on creation, unlocks on deletion
+			- std::unique_lock like a lock guard, but doesnt own the lock (can therefore unlock and relock them when needed)
+		- Don’t pass pointers and references to protected data outside the scope of the lock, whether by returning them from a function, storing them in externally visible memory, or passing them as arguments to user-supplied functions. to keep protected data protected
+		- need to find a balance in locking granularity
+		- std::lock can take multiple locks as parameters to help avoid deadlock
+		- avoiding deadlock
+			- avoid nested locks
+			- avoid calling user-supplied code while holding a lock
+			- acquire locks in a fixed order
+			- use a lock hierarchy (custom lock with hierarchy value, can only hold a lock if you dont hold any locks from lower hierarchy value)
+			- try not to join or wait while holding a lock
+	- initializing shared data
+		- can lock an if check and initialize if necessary, but then every thread has to wait on the lock
+			- alternatively can use the buggy "double checked locking"
+		- instead c++ has std::once_flag and std::call_once
+		- or just use a static variable. these are guaranteed thread safe intialized on c++11
+	- one writer, multiple reader mutexes
+
+lvalue—a real variable or reference to one—or an rvalue—a temporary of some kind
+- rvalues get move contructed into std::thread and std::async calls. this allows for move-only types as function object and arguments. 
+
+syncing threads
+ 	- simplest option, lock, check, then sleep for a time.
+ 		- sleep too little, waste processing power. sleep too long, can cause stutters in realtime applications
+ 	- use condition variables
+ 		- use condition_variable instead of condition_variable_any for perf reasons
+ 		- create shared condition variable, one thread calls cond.notify_one and the other thread calls cond.wait with a lambda or function check. 
+ 			- mutex in the wait call should be a unique_lock rather than lock_guard so we can unlock it if the condition returns false
+ 			- also a notify_all function, which does what it says
+		- not good to use when a thread is only going to ever wait once, instead use...
+	- futures
+		- future (unique) and shared_future. multiple shared futures can refer to the same event
+		- can create a future by calling std::async, starts an async background thread that returns a future. call get() on the future to block the calling thread until the future is ready
+			- up to implementation whether it starts a thread or runs only when the future is waited for, you can pass in a flag to specify which you want
+		- std::packaged_task ties a future to a function
+			- created with a function as an argument. object is callable. call get_future to get future object with template type of the return type of the function. when object is called, it runs the task. future becomes ready when task completes
+		- third way to create is with a std::promise
+			- when task cant be represented as simple function call or result may come from more than one place
+			- std::promise has associated future (get_future), and when set_value is called, the future becomes ready
+		- future objects member functions are not thread safe. if multiple threads need to read, use a shared_future. member functions still not thread safe, but can have a copy per thread, that will make member functions thread safe.
+	- some functions accept timeouts
+	- futures can allow for threads computations to depend on the results of another, without any explicit access to shared data. allowing for no need for any actual locking
+
+Memory Model/Atomics
+	- objects stored in one or more memory locations
+		- each location is either an object of a scalar type or a class or a sequence of adjacent bit fields
+	- we have problems when 2 threads access the same memory location, if one is modifying data
+		- need to enforce order, locks or atomics
+	-atomics
+		- an atomic operation is an indivisible operation, its either done or not, cant be half done
+		- must use <atomic> library types for c++ types to be guaranteed atomic
+		- compare_and_exchange functions are cornerstone to atomic programming. have a weak and strong version in c++. pass in a expected value, and sets the actual value with a desired value if the expected value matches the current actual value.
+
+
+9: advanced thread management techniques
+	- THREAD POOLS

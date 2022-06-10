@@ -1,0 +1,23 @@
+maybe we need to have each chunk not actually know about its neighbors? we could store extra voxels per chunk to know about neighboring voxels instead of relying on waiting for everything. could then delete extra voxel data after generation is over
+	- but then when we break a block on the edge, we would need to regenerate neighboring chunk mesh. would require knowing neighbor or keeping that data around, and updating up to N chunks whenever we remove a block.
+		- we could have two copies of generate mesh, one that uses neighbors and one that uses temp data
+			- how much would this actually save?
+
+otherwise we need to somehow stall after before generating mesh, to make sure we have all neighbors and that all neighbors have generated meshes.
+	- chunk that wants to be built could kick off generating volumes of neighbors in the thread pool
+		- voxelscene would then only be responsible for generating meshes and kicking off initial chunks
+			- i guess we should still keep as much work in here as possible. chunks should only kick off neighbors when necessary
+				- but then why would a chunk ever have to wait in theory? if generating mesh is lower priority than generating volume would that be fine? might be too slow? might have to have different priorities for chunks that are in view frustum, or chunks that you just broke so theres no delay there.
+	- could voxelscene be the one to check that all neighbor volumes are generated before meshing?
+		- this probably should be how it works. chunks shouldnt talk to each other that much probably? but then itll be a bottleneck potentially
+		- much less complexity though, esp good in the job system
+		- need voxelscene to store a list of chunks that havent yet have meshes generated with them. iterates them to add them to the job list each frame, but checks neighbor pointers and looks for each chunk to have generated volume. neighbor adding code still needs to lock. cannot avoid this as long as we can potentially delete chunks while theyre being built. and i dont see a way to avoid this, without locking.. so
+			- can maybe optimize this later by notifying neighbors of mesh generation completion. chunks could then have a callback that adds their own meshing job to the queue instead of waiting for update to roll around on the voxel scene.
+				- should i just do it this way to begin with?
+				- would be another point of lock contention, but ?
+
+
+must be some better way of udpating neighbors during creation. can we not notify until we have a bunch allocated, then batch assign them so we have less lock contention and can ensure that we dont have to check each time for completing the sides mask. overkill?
+
+
+have main thread scan over list of chunks. accumulating neighbors m_generated flags into a mask, and then when the mask is full then we call the generate mesh job. the notion of chunks notifying neighbors when theyre done generating is cool but it would require our neighbor pointers to be non-const and also more contention on the locks since we'd need to lock each neighbor to update. might be fine? maybe something to mess around with in the future.

@@ -9,6 +9,7 @@
 #include "Common.h"
 #include "glm/gtx/hash.hpp"
 #include "ShaderProgram.h"
+#include "ThreadPool.h"
 
 class Chunk;
 class Camera;
@@ -42,4 +43,6 @@ private:
 
 	std::thread m_thread;
 	std::mutex m_mutex;
+
+	ThreadPool m_threadPool;
 };
