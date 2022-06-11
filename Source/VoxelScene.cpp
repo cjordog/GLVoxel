@@ -16,7 +16,6 @@ const uint RENDER_DISTANCE = 10;
 VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
-	//m_thread = std::thread(&VoxelScene::GenerateMeshes, this);
 }
 
 void VoxelScene::InitShared()
@@ -29,8 +28,10 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 	if (m_chunks[chunkPos])
 		return nullptr;
 
+	// TODO:: use smart pointers
 	Chunk* chunk = new Chunk(chunkPos);
 	m_chunks[chunkPos] = chunk;
+	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
 	
 	return chunk;
 }
@@ -88,7 +89,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 	//	RenderSettings::Get().deleteMesh = false;
 	//}
 
-	int i = 15;
+	int i = 10;
 	for (int j = -i; j <= i; j++)
 	{
 		for (int k = -i; k <= i; k++)
@@ -99,21 +100,22 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 					j + position.x / float(CHUNK_UNIT_SIZE),
 					k + position.y / float(CHUNK_UNIT_SIZE),
 					l + position.z / float(CHUNK_UNIT_SIZE));
-				Chunk* newChunk = CreateChunk(chunkPos);
-
-				//MY_PRINTF("creating chunk %d %d %d\n", chunkPos.x, chunkPos.y, chunkPos.z);
-
-				if (newChunk)
+				if (!m_chunks[chunkPos])
 				{
-					newChunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
-					// notify neighbors
-					for (uint m = 0; m < BlockFace::NumFaces; m++)
+					Chunk* newChunk = CreateChunk(chunkPos);
+
+					//redundant but w/e
+					if (newChunk)
 					{
-						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-						// note to self: reads to neighbor ptrs need to be locked. 
+						// notify neighbors
+						for (uint m = 0; m < BlockFace::NumFaces; m++)
+						{
+							NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
+							// note to self: reads to neighbor ptrs need to be locked. 
+						}
+						//batch submit these?
+						m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
 					}
-					//batch submit these?
-					m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
 				}
 			}
 		}
@@ -239,7 +241,8 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		if (chunk == nullptr)
 			continue;
 
-		if (chunk->IsEmpty() || chunk->IsNoGeo())
+		// might want to figure out a way to do this without locking maybe? idk
+		if (!chunk->Renderable())
 			continue;
 
 		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunkPos) * float(CHUNK_UNIT_SIZE));

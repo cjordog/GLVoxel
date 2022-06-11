@@ -45,6 +45,7 @@ public:
 
 	bool IsEmpty() const { return bool(m_empty); }
 	bool IsNoGeo() const { return bool(m_noGeo); }
+	bool Renderable();
 
 	void Render(RenderSettings::DrawMode drawMode);
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);

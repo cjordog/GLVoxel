@@ -84,6 +84,12 @@ bool Chunk::AreNeighborsGenerated() const
 	return (m_neighborGeneratedMask == 0x3f);
 }
 
+bool Chunk::Renderable()
+{
+	std::lock_guard lock(m_mutex);
+	return (!IsEmpty() && !IsNoGeo());
+}
+
 void Chunk::Render(RenderSettings::DrawMode drawMode)
 {
 	std::unique_lock lock(m_mutex, std::try_to_lock);
@@ -166,6 +172,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 
 void Chunk::GenerateVolume()
 {
+	bool emptyVal = 1;
 	// does this not need to be locked? how does it work when two threads try to write two different variables on the same object. nvm this is fine.
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
@@ -181,7 +188,7 @@ void Chunk::GenerateVolume()
 				else 
 				{
 					m_voxels[x][y][z] = BlockType::Dirt;
-					m_empty = 0;
+					emptyVal = 0;
 				}
 			}
 		}
@@ -189,11 +196,14 @@ void Chunk::GenerateVolume()
 	m_mutex.lock();
 	m_state = ChunkState::CollectingNeighborRefs;
 	m_generated = 1;
+	m_empty = emptyVal;
+	Chunk* neighborsCopy[BlockFace::NumFaces];
+	memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
 	m_mutex.unlock();
 
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
-		if (Chunk* neighbor = m_neighbors[i])
+		if (Chunk* neighbor = neighborsCopy[i])
 		{
 			neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
 		}
@@ -247,12 +257,16 @@ bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
 
 void Chunk::GenerateMeshInt()
 {
+	m_mutex.lock();
+	Chunk* neighborsCopy[BlockFace::NumFaces];
+	memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
+	m_mutex.unlock();
 	//cache neighbor voxels so we dont have locking issues later.
 	BlockType neighborVoxels[BlockFace::NumFaces][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE];
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
 		// should be guaranteed to have this here. unless maybe an unload? but then we have to bail somehow.
-		if (Chunk* neighborChunk = m_neighbors[i])
+		if (Chunk* neighborChunk = neighborsCopy[i])
 		{
 			std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
 			if (neighborChunk->m_generated)
