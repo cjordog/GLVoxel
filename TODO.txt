@@ -12,3 +12,4 @@
 - skybox rendering
 - LODing? depends on approach
 - separate update and render into threads
+- some way of seeing chunk borders

@@ -17,10 +17,11 @@ public:
 	DrawMode m_drawMode;
 	bool greedyMesh = false;
 	bool deleteMesh = false;
+	bool mtEnabled = true;
 
 // https://stackoverflow.com/questions/1008019/c-singleton-design-pattern
 private:
-	RenderSettings() {}                    // Constructor? (the {} brackets) are needed here.
+	RenderSettings() {};                    // Constructor? (the {} brackets) are needed here.
 
 public:
 	RenderSettings(RenderSettings const&) = delete;

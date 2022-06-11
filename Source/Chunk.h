@@ -3,6 +3,7 @@
 #include "stdint.h"
 #include <vector>
 #include <mutex>
+#include <functional>
 
 #include "Common.h"
 #include "RenderSettings.h"
@@ -25,6 +26,7 @@ public:
 		BrandNew,
 		GeneratingVolume,
 		CollectingNeighborRefs,
+		WaitingForMeshGeneration,
 		GeneratingMesh,
 		GeneratingBuffers,
 		Done
@@ -38,14 +40,16 @@ public:
 	uint GetIndexCount() { return m_indexCount; }
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
+	ChunkState GetChunkState() const;
+	bool AreNeighborsGenerated() const;
 
 	bool IsEmpty() const { return bool(m_empty); }
 	bool IsNoGeo() const { return bool(m_noGeo); }
 
-	void Render(RenderSettings::DrawMode drawMode) const;
+	void Render(RenderSettings::DrawMode drawMode);
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);
-	bool UpdateNeighborRef(BlockFace face, const Chunk* neighbor);
-	void NotifyNeighborOfVolumeGeneration(BlockFace face);
+	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
+	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
 
 	void GenerateVolume();
 	void GenerateMesh();
@@ -55,6 +59,7 @@ public:
 	const glm::vec3 m_chunkPos;
 
 	std::mutex m_mutex;
+	std::function<void(Chunk*)> m_generateMeshCallback;
 
 private:
 
@@ -69,7 +74,7 @@ private:
 	std::vector<Vertex> m_vertices = std::vector<Vertex>();
 	std::vector<uint> m_indices = std::vector<uint>();
 
-	const Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
+	Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
 	uint8_t m_neighborCollectedMask = 0;
 	uint8_t m_neighborGeneratedMask = 0;
 

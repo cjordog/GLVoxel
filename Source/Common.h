@@ -5,10 +5,16 @@
 #include <glm/vec4.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+//#include <debugapi.h> // gross
+//#include <cstdio>
+//#include <windows.h> // no
 
 typedef unsigned int uint;
 
 #define PI 3.14159f
+
+//#define MY_PRINTF(...) {char cad[512]; sprintf(cad, __VA_ARGS__);  OutputDebugString(cad);}
+
 
 // how many voxels per chunk
 constexpr int CHUNK_VOXEL_SIZE = 8;

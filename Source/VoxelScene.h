@@ -1,7 +1,8 @@
 #pragma once
 
 #include <unordered_map>
-#include <unordered_set>
+//#include <unordered_set>
+#include <queue>
 #include <mutex>
 #include <thread>
 
@@ -23,6 +24,7 @@ public:
 
 	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
 	void Update(const glm::vec3& position);
+	void GenerateChunks(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
 	void GenerateMeshes();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
@@ -30,19 +32,22 @@ public:
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
 
+	void AddToMeshListCallback(Chunk* chunk);
+
+
 private:
-	struct ChunkWrapper
-	{
-		Chunk* chunk;
-		std::mutex lock;
-	};
-	std::unordered_map<glm::i32vec3, ChunkWrapper> m_chunks;
-	std::unordered_set<Chunk*> m_generateMeshList;
+	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
+	std::queue<Chunk*> m_generateMeshList;
+	std::queue<Chunk*> m_generateMeshCallbackList;
 
 	static ShaderProgram s_shaderProgram;
 
 	std::thread m_thread;
-	std::mutex m_mutex;
+	std::mutex m_GenerateMeshCallbackListMutex;
 
 	ThreadPool m_threadPool;
+
+	uint currentGenerateRadius = 3;
+	uint lastGenerateRadius = 0;
+	glm::vec3 lastGeneratePos;
 };

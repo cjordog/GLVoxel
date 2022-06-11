@@ -6,6 +6,8 @@
 #include <thread>
 #include <functional>
 
+#include "RenderSettings.h"
+
 enum JobPriority : unsigned
 {
 	Priority_Min = 0,
@@ -19,14 +21,14 @@ enum JobPriority : unsigned
 
 struct Job
 {
-	int id;
+	unsigned id;
 	std::function<void()> func;
 	JobPriority priority;
 };
 
 struct JobCmp {
 	bool operator()(const Job& lhs, const Job& rhs) const {
-		return static_cast<std::underlying_type<JobPriority>::type>(lhs.priority) > static_cast<std::underlying_type<JobPriority>::type>(rhs.priority);
+		return lhs.priority > rhs.priority;
 	}
 };
 
@@ -36,6 +38,10 @@ public:
 	ThreadPool()
 		: m_done(false)
 	{
+		RenderSettings& r = RenderSettings::Get();
+		//r.mtEnabled = false;
+		if (!r.mtEnabled)
+			return;
 		const unsigned threadCount = std::thread::hardware_concurrency();
 		try
 		{
@@ -62,9 +68,16 @@ public:
 		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
 	}
 
+	bool GetJob(Job& j)
+	{
+		if (m_workQueue.try_pop(j))
+			return true;
+		return false;
+	}
+
 private:
 	std::atomic_bool m_done;
-	Concurrency::concurrent_priority_queue<Job> m_workQueue;
+	Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
 	std::vector<std::thread> m_threads;
 	unsigned jobCount = 0;
 

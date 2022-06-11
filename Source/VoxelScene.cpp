@@ -15,8 +15,8 @@ const uint RENDER_DISTANCE = 10;
 
 VoxelScene::VoxelScene()
 {
-	m_chunks = std::unordered_map<glm::i32vec3, ChunkWrapper>();
-	m_thread = std::thread(&VoxelScene::GenerateMeshes, this);
+	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
+	//m_thread = std::thread(&VoxelScene::GenerateMeshes, this);
 }
 
 void VoxelScene::InitShared()
@@ -26,85 +26,102 @@ void VoxelScene::InitShared()
 
 Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 {
-	if (m_chunks[chunkPos].chunk)
+	if (m_chunks[chunkPos])
 		return nullptr;
 
 	Chunk* chunk = new Chunk(chunkPos);
-	m_chunks[chunkPos].chunk = chunk;
+	m_chunks[chunkPos] = chunk;
 	
 	return chunk;
 }
 
 inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace side, BlockFace oppositeSide)
 {
-	if (Chunk* neighbor = m_chunks[pos + glm::i32vec3(s_blockNormals[side])].chunk)
+	if (Chunk* neighbor = m_chunks[pos + glm::i32vec3(s_blockNormals[side])])
 	{
-		neighbor->UpdateNeighborRef(oppositeSide, chunk);
-		chunk->UpdateNeighborRef(side, neighbor);
+		if (neighbor->UpdateNeighborRef(oppositeSide, chunk))
+			m_generateMeshList.push(neighbor);
+		if (chunk->UpdateNeighborRef(side, neighbor))
+			m_generateMeshList.push(chunk);
 	}
 }
 
 void VoxelScene::Update(const glm::vec3& position)
 {
-	m_mutex.lock();
-	if (RenderSettings::Get().deleteMesh)
+	GenerateChunks(position);
+	GenerateMeshes();
+
+	if (!RenderSettings::Get().mtEnabled)
 	{
-		for (auto& chunk : m_chunks)
+		Job j;
+		while (m_threadPool.GetJob(j))
 		{
-			delete chunk.second.chunk;
+			j.func();
 		}
-		m_chunks.clear();
-		RenderSettings::Get().deleteMesh = false;
 	}
+}
 
-	// update in concentric circles outwards from position
-	// TODO:: this is dumb. could have this start at some low value and grow greater over frames. could even scale dynamically with how much work is in job pool.
-	// because we dont actually need this to grow every update, especially on small movements. get rid of outer loop altogether
-	// TODO:: dont need to run this every frame. lots of wasted work. need to do checks to see if anything has changed that would cause us to need to call this update.
-	for (int i = 0; i <= RENDER_DISTANCE; i++)
+void VoxelScene::GenerateChunks(const glm::vec3& position)
+{
+	// TODO:: can dynamically update this based on load
+	if (currentGenerateRadius != RENDER_DISTANCE)
+		currentGenerateRadius++;
+	//TODO:: update with real values
+	//if (glm::length(lastGeneratePos - position) < 0.0f && lastGenerateRadius == currentGenerateRadius)
+	//{
+	//	// do something (nothing)
+	//}
+	//else
+	//{
+	//	lastGeneratePos = position;
+	//	lastGenerateRadius = currentGenerateRadius;
+	//}
+
+	// TODO:: fix this?
+	//if (RenderSettings::Get().deleteMesh)
+	//{
+	//	for (auto& chunk : m_chunks)
+	//	{
+	//		delete chunk.second.chunk;
+	//	}
+	//	m_chunks.clear();
+	//	RenderSettings::Get().deleteMesh = false;
+	//}
+
+	int i = 15;
+	for (int j = -i; j <= i; j++)
 	{
-		//uint updateDiameter = i * 2 + 1;
-		for (int j = -i; j <= i; j++)
+		for (int k = -i; k <= i; k++)
 		{
-			for (int k = -i; k <= i; k++)
+			for (int l = -i; l <= i; l++)
 			{
-				for (int l = -i; l <= i; l++)
+				glm::i32vec3 chunkPos = glm::i32vec3(
+					j + position.x / float(CHUNK_UNIT_SIZE),
+					k + position.y / float(CHUNK_UNIT_SIZE),
+					l + position.z / float(CHUNK_UNIT_SIZE));
+				Chunk* newChunk = CreateChunk(chunkPos);
+
+				//MY_PRINTF("creating chunk %d %d %d\n", chunkPos.x, chunkPos.y, chunkPos.z);
+
+				if (newChunk)
 				{
-					glm::i32vec3 localChunkPos(j, k, l);
-					if (sqrt(pow(j,2) + pow(k,2) + pow(l,2)) <= float(i))
+					newChunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
+					// notify neighbors
+					for (uint m = 0; m < BlockFace::NumFaces; m++)
 					{
-						glm::i32vec3 chunkPos = localChunkPos + glm::i32vec3(position / float(CHUNK_UNIT_SIZE));
-						Chunk* newChunk = CreateChunk(chunkPos);
-
-						if (newChunk)
-						{
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Front, BlockFace::Back);
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Back, BlockFace::Front);
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Right, BlockFace::Left);
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Left, BlockFace::Right);
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Top, BlockFace::Bottom);
-							//NotifyNeighbor(newChunk, chunkPos, BlockFace::Bottom, BlockFace::Top);
-
-							// notify neighbors
-							for (uint m = 0; m < BlockFace::NumFaces; m++)
-							{
-								NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-								// note to self: reads to neighbor ptrs need to be locked. 
-							}
-							m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
-							m_generateMeshList.emplace(newChunk);
-						}
+						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
+						// note to self: reads to neighbor ptrs need to be locked. 
 					}
+					//batch submit these?
+					m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
 				}
 			}
 		}
 	}
-	m_mutex.unlock();
 }
 
 void VoxelScene::TestUpdate(const glm::vec3& position)
 {
-	m_mutex.lock();
 	std::unordered_set<Chunk*> generateMeshList;
 	std::vector<glm::vec3> poss = {
 		glm::vec3(0, -1, 0),
@@ -126,37 +143,37 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 			generateMeshList.emplace(newChunk);
 
 			// notify neighbors
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Front])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Front])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Back, newChunk))
 					generateMeshList.emplace(neighbor);
 				newChunk->UpdateNeighborRef(BlockFace::Front, neighbor);
 			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Back])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Back])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Front, newChunk))
 					generateMeshList.emplace(neighbor);
 				newChunk->UpdateNeighborRef(BlockFace::Back, neighbor);
 			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Right])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Right])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Left, newChunk))
 					generateMeshList.emplace(neighbor);
 				newChunk->UpdateNeighborRef(BlockFace::Right, neighbor);
 			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Left])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Left])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Right, newChunk))
 					generateMeshList.emplace(neighbor);
 				newChunk->UpdateNeighborRef(BlockFace::Left, neighbor);
 			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Top])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Top])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Bottom, newChunk))
 					generateMeshList.emplace(neighbor);
 				newChunk->UpdateNeighborRef(BlockFace::Top, neighbor);
 			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Bottom])].chunk)
+			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Bottom])])
 			{
 				if (neighbor->UpdateNeighborRef(BlockFace::Top, newChunk))
 					generateMeshList.emplace(neighbor);
@@ -164,24 +181,44 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 			}
 		}
 	}
-	m_mutex.unlock();
 }
 
 void VoxelScene::GenerateMeshes()
 {
-	while (1)
+	//horrible. fix later
+	m_GenerateMeshCallbackListMutex.lock();
+	while (!m_generateMeshCallbackList.empty())
 	{
-		m_mutex.lock();
-		for (int i = 0; i < 10; i++)
+		m_generateMeshList.push(m_generateMeshCallbackList.front());
+		m_generateMeshCallbackList.pop();
+	}
+	m_GenerateMeshCallbackListMutex.unlock();
+
+	const uint frameMaxMeshes = m_generateMeshList.size();
+	const uint iterations = std::min(uint(m_generateMeshList.size()), frameMaxMeshes);
+	for (uint i = 0; i < iterations; i++)
+	{
+		Chunk* chunk = m_generateMeshList.front();
+		m_generateMeshList.pop();
+
+		std::unique_lock lock(chunk->m_mutex, std::try_to_lock);
+		if (!lock.owns_lock()) {
+			continue;
+		}
+
+		// this call should be locked since its accessing state. how to deal with this without double locking?
+		Chunk::ChunkState chunkState = chunk->GetChunkState();
+		if (chunkState == Chunk::ChunkState::WaitingForMeshGeneration)
 		{
-			if (m_generateMeshList.size())
+			if (chunk->AreNeighborsGenerated())
 			{
-				std::unordered_set<Chunk*>::iterator chunk = m_generateMeshList.begin();
-				(*chunk)->GenerateMesh();
-				m_generateMeshList.erase(chunk);
+				m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
+				continue;
 			}
 		}
-		m_mutex.unlock();
+
+		//otherwise re-add to queue to try again later
+		m_generateMeshList.push(chunk);
 	}
 }
 
@@ -193,9 +230,10 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 
 	RenderSettings::DrawMode drawMode = RenderSettings::Get().m_drawMode;
 
+	// should probably shove these into a render list
 	for (auto& item : m_chunks) 
 	{
-		const Chunk* chunk = item.second.chunk;
+		Chunk* chunk = item.second;
 		const glm::vec3& chunkPos = item.first;
 
 		if (chunk == nullptr)
@@ -216,4 +254,10 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
 {
 	return worldPos / float(CHUNK_UNIT_SIZE);
+}
+
+void VoxelScene::AddToMeshListCallback(Chunk* chunk)
+{
+	std::lock_guard lock(m_GenerateMeshCallbackListMutex);
+	m_generateMeshCallbackList.push(chunk);
 }

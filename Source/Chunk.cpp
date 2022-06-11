@@ -74,8 +74,22 @@ Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 	return m_voxels[x][y][z];
 }
 
-void Chunk::Render(RenderSettings::DrawMode drawMode) const
+Chunk::ChunkState Chunk::GetChunkState() const
 {
+	return m_state;
+}
+
+bool Chunk::AreNeighborsGenerated() const
+{
+	return (m_neighborGeneratedMask == 0x3f);
+}
+
+void Chunk::Render(RenderSettings::DrawMode drawMode)
+{
+	std::unique_lock lock(m_mutex, std::try_to_lock);
+	if (!lock.owns_lock()) {
+		return;
+	}
 	if (!m_meshGenerated)
 		return;
 
@@ -119,27 +133,35 @@ void Chunk::Render(RenderSettings::DrawMode drawMode) const
 //	return updated;
 //}
 
-bool Chunk::UpdateNeighborRef(BlockFace face, const Chunk* neighbor)
+bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 {
-	std::lock_guard lock(m_mutex);
+	std::lock_guard<std::mutex> lock(m_mutex);
+	// can this even happen is this too redundant
 	if (m_neighbors[face] != neighbor)
 	{
 		m_neighbors[face] = neighbor;
 		m_neighborCollectedMask |= 1u << face; // if we unload a chunk, we might not want this to be an |=
 		if (neighbor->m_generated)
 			m_neighborGeneratedMask |= 1u << face;
-		if (m_neighborCollectedMask == 0b00111111 && m_state == ChunkState::CollectingNeighborRefs)	// might not want to check state here if we unload and reload a chunk?
+		if (m_neighborCollectedMask == 0x3f && m_state == ChunkState::CollectingNeighborRefs)	// might not want to check state here if we unload and reload a chunk?
 		{
-			m_state = ChunkState::GeneratingMesh; // need to make sure all neighbors have generated volumes
+			m_state = ChunkState::WaitingForMeshGeneration;
 			return true;
 		}
 	}
 	return false;
 }
 
-void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace face)
+void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 {
-	m_neighborGeneratedMask |= 1u << face;
+	std::unique_lock lock(m_mutex);
+	m_neighborGeneratedMask |= 1u << neighbor;
+	if (m_neighborGeneratedMask == 0x3f)
+	{
+		m_state = ChunkState::WaitingForMeshGeneration;
+		lock.unlock();
+		m_generateMeshCallback(this);
+	}
 }
 
 void Chunk::GenerateVolume()
@@ -164,20 +186,35 @@ void Chunk::GenerateVolume()
 			}
 		}
 	}
+	m_mutex.lock();
 	m_state = ChunkState::CollectingNeighborRefs;
 	m_generated = 1;
+	m_mutex.unlock();
+
+	for (uint i = 0; i < BlockFace::NumFaces; i++)
+	{
+		if (Chunk* neighbor = m_neighbors[i])
+		{
+			neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
+		}
+	}
 }
 
 void Chunk::GenerateMesh()
 {
+	std::unique_lock lock(m_mutex);
 	if (IsEmpty() || !m_generated)
 		return;
+
+	m_state = ChunkState::GeneratingMesh;
 
 	m_vertexCount = 0;
 	m_indexCount = 0;
 
 	m_vertices.clear();
 	m_indices.clear();
+
+	lock.unlock();
 
 	if (RenderSettings::Get().greedyMesh)
 	{
@@ -187,6 +224,8 @@ void Chunk::GenerateMesh()
 	{
 		GenerateMeshInt();
 	}
+
+	lock.lock();
 	
 	if (m_vertexCount == 0)
 	{
@@ -198,6 +237,7 @@ void Chunk::GenerateMesh()
 	}
 
 	m_meshGenerated = 1;
+	m_state = ChunkState::GeneratingBuffers;
 }
 
 bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
@@ -207,6 +247,46 @@ bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
 
 void Chunk::GenerateMeshInt()
 {
+	//cache neighbor voxels so we dont have locking issues later.
+	BlockType neighborVoxels[BlockFace::NumFaces][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE];
+	for (uint i = 0; i < BlockFace::NumFaces; i++)
+	{
+		// should be guaranteed to have this here. unless maybe an unload? but then we have to bail somehow.
+		if (Chunk* neighborChunk = m_neighbors[i])
+		{
+			std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
+			if (neighborChunk->m_generated)
+			{
+				for (uint j = 0; j < CHUNK_VOXEL_SIZE; j++)
+				{
+					for (uint k = 0; k < CHUNK_VOXEL_SIZE; k++)
+					{
+						uint dim = i / 2;
+						uint u = (dim + 1) % 3;
+						uint v = (dim + 2) % 3;
+						glm::i32vec3 pos;
+						pos[dim] = (CHUNK_VOXEL_SIZE - 1) * (i % 2);
+						pos[u] = j;
+						pos[v] = k;
+
+						neighborVoxels[i][j][k] = neighborChunk->GetBlockType(pos.x, pos.y, pos.z);
+					}
+				}
+			}
+			else
+			{
+				assert(false);
+				return;
+			}
+		}
+		else
+		{
+			assert(false);
+			return;
+			// need to bail, think about how to handle this later.
+		}
+	}
+	std::lock_guard lock(m_mutex);
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -233,25 +313,12 @@ void Chunk::GenerateMeshInt()
 						}
 						else // were on the edge face of the chunk
 						{
-							// compare with neighboring chunk, if it exists
-							if (const Chunk* neighborChunk = m_neighbors[i])
-							{
-								// TODO :: consolidate these in the outer loop? maybe lock once at start and cache all data needed.
-								std::lock_guard lock(neighborChunk->m_mutex); // this might be real slow...
-								if (neighborChunk->m_generated &&
-									!neighborChunk->IsEmpty())
-								{
-									if (normal.x)
-										neighborX += (neighborX < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
-									if (normal.y)
-										neighborY += (neighborY < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
-									if (normal.z)
-										neighborZ += (neighborZ < 0) ? CHUNK_VOXEL_SIZE : -CHUNK_VOXEL_SIZE;
-
-									if (neighborChunk->GetBlockType(neighborX, neighborY, neighborZ) == BlockType::Dirt)
-										continue;
-								}
-							}
+							uint dim = i / 2;
+							uint u = (dim + 1) % 3;
+							uint v = (dim + 2) % 3;
+							glm::i32vec3 neighborPos(neighborX, neighborY, neighborZ);
+							if (neighborVoxels[i][neighborPos[u]][neighborPos[v]] == BlockType::Dirt)
+								continue;
 						}
 
 						// add faces
@@ -274,6 +341,7 @@ void Chunk::GenerateMeshInt()
 }
 
 // adopted from https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/
+// TODO:: this is broken after threading updates. see normal meshing func. need to cache neighbor voxel types instead of accessing neighbors directly
 void Chunk::GenerateGreedyMeshInt()
 {
 	// sweep over each axis, generate forward and backward facing planes in one iteration
