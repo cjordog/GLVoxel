@@ -92,10 +92,12 @@ bool Chunk::Renderable()
 
 void Chunk::Render(RenderSettings::DrawMode drawMode)
 {
+	// might not have to lock if we had a separate chunk render list?
 	std::unique_lock lock(m_mutex, std::try_to_lock);
 	if (!lock.owns_lock()) {
 		return;
 	}
+
 	if (!m_meshGenerated)
 		return;
 
