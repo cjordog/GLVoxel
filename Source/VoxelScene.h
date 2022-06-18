@@ -2,7 +2,7 @@
 
 #include <unordered_map>
 //#include <unordered_set>
-#include <queue>
+#include <deque>
 #include <mutex>
 #include <thread>
 
@@ -37,12 +37,12 @@ public:
 
 private:
 	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
-	std::queue<Chunk*> m_generateMeshList;
-	std::queue<Chunk*> m_generateMeshCallbackList;
+	// is there any reason these arent just vectors now
+	std::deque<Chunk*> m_generateMeshList;
+	std::deque<Chunk*> m_generateMeshCallbackList;
 
 	static ShaderProgram s_shaderProgram;
 
-	std::thread m_thread;
 	std::mutex m_GenerateMeshCallbackListMutex;
 
 	ThreadPool m_threadPool;

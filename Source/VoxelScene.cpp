@@ -40,10 +40,11 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 {
 	if (Chunk* neighbor = m_chunks[pos + glm::i32vec3(s_blockNormals[side])])
 	{
-		if (neighbor->UpdateNeighborRef(oppositeSide, chunk))
-			m_generateMeshList.push(neighbor);
-		if (chunk->UpdateNeighborRef(side, neighbor))
-			m_generateMeshList.push(chunk);
+		// this might be too slow to wait for locks
+		neighbor->UpdateNeighborRef(oppositeSide, chunk)
+			;// m_generateMeshList.push_back(neighbor);
+		chunk->UpdateNeighborRef(side, neighbor)
+			;// m_generateMeshList.push_back(chunk);
 	}
 }
 
@@ -65,7 +66,7 @@ void VoxelScene::Update(const glm::vec3& position)
 void VoxelScene::GenerateChunks(const glm::vec3& position)
 {
 	// TODO:: can dynamically update this based on load
-	if (currentGenerateRadius != RENDER_DISTANCE)
+	if (currentGenerateRadius < RENDER_DISTANCE)
 		currentGenerateRadius++;
 	//TODO:: update with real values
 	//if (glm::length(lastGeneratePos - position) < 0.0f && lastGenerateRadius == currentGenerateRadius)
@@ -114,6 +115,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 							// note to self: reads to neighbor ptrs need to be locked. 
 						}
 						//batch submit these?
+						//newChunk->GenerateVolume();
 						m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
 					}
 				}
@@ -187,13 +189,11 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 
 void VoxelScene::GenerateMeshes()
 {
-	//horrible. fix later
+	// in theory shouldnt actually need to lock this. only need to because render is spinning on all chunks
 	m_GenerateMeshCallbackListMutex.lock();
-	while (!m_generateMeshCallbackList.empty())
-	{
-		m_generateMeshList.push(m_generateMeshCallbackList.front());
-		m_generateMeshCallbackList.pop();
-	}
+	if (m_generateMeshCallbackList.size())
+		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
+	m_generateMeshCallbackList.clear();
 	m_GenerateMeshCallbackListMutex.unlock();
 
 	const uint frameMaxMeshes = m_generateMeshList.size();
@@ -201,26 +201,28 @@ void VoxelScene::GenerateMeshes()
 	for (uint i = 0; i < iterations; i++)
 	{
 		Chunk* chunk = m_generateMeshList.front();
-		m_generateMeshList.pop();
+		m_generateMeshList.pop_front();
 
 		std::unique_lock lock(chunk->m_mutex, std::try_to_lock);
 		if (!lock.owns_lock()) {
+			m_generateMeshList.push_back(chunk);
 			continue;
 		}
 
-		// this call should be locked since its accessing state. how to deal with this without double locking?
 		Chunk::ChunkState chunkState = chunk->GetChunkState();
 		if (chunkState == Chunk::ChunkState::WaitingForMeshGeneration)
 		{
-			if (chunk->AreNeighborsGenerated())
+			if (chunk->ReadyForMeshGeneration())
 			{
+				lock.unlock();
+				//chunk->GenerateMesh();
 				m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
 				continue;
 			}
 		}
 
 		//otherwise re-add to queue to try again later
-		m_generateMeshList.push(chunk);
+		m_generateMeshList.push_back(chunk);
 	}
 }
 
@@ -241,7 +243,7 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		if (chunk == nullptr)
 			continue;
 
-		// might want to figure out a way to do this without locking maybe? idk
+		// might want to figure out a way to do this without locking maybe? can use an atomic. assign at end of generateMesh
 		if (!chunk->Renderable())
 			continue;
 
@@ -262,5 +264,5 @@ glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
 void VoxelScene::AddToMeshListCallback(Chunk* chunk)
 {
 	std::lock_guard lock(m_GenerateMeshCallbackListMutex);
-	m_generateMeshCallbackList.push(chunk);
+	m_generateMeshCallbackList.push_back(chunk);
 }

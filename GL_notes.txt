@@ -56,3 +56,15 @@ Coordinate systems
 	- screen space (0 to 1)
 	- opengl uses right handed coords, y-up, -z forward
 		- uses left handed after switching to NDC, proj matrix switches z dir, and handedness
+
+
+Lighting
+	- diffuse is n dot l
+	- using non uniform scales with normal vectors(or other direction vectors) can cause distortion.
+		- you want to either not use non-uniform scale, or use the transpose of the inverse of the top 3x3 of the model matrix
+			- http://www.lighthouse3d.com/tutorials/glsl-12-tutorial/the-normal-matrix/
+			- but dont do inverses in the shader, really expensive
+		- and for direction vectors, just use 3x3 transform, dont need translation
+	- spec is L reflected over n, dotted with viewDir
+	- naive lighting calcuation = (spec + diff + amb) * objColor
+		- can separate each light term into spec = light.spec * mat.spec * specVal for more control

@@ -21,7 +21,7 @@ public:
 		Stone,
 	};
 
-	enum class ChunkState
+	enum ChunkState : uint16_t
 	{
 		BrandNew,
 		GeneratingVolume,
@@ -41,7 +41,7 @@ public:
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
 	ChunkState GetChunkState() const;
-	bool AreNeighborsGenerated() const;
+	bool ReadyForMeshGeneration() const;
 
 	bool IsEmpty() const { return bool(m_empty); }
 	bool IsNoGeo() const { return bool(m_noGeo); }
@@ -76,8 +76,8 @@ private:
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
-	uint8_t m_neighborCollectedMask = 0;
-	uint8_t m_neighborGeneratedMask = 0;
+	uint8_t m_neighborCollectedMask = 0;	// we might not need a collected mask anymore? just generated
+	std::atomic<uint8_t> m_neighborGeneratedMask = 0;
 
 	AABB m_AABB;
 	
@@ -88,11 +88,15 @@ private:
 	uint m_EBO = 0;
 	uint m_VAO = 0;
 
-	ChunkState m_state = ChunkState::BrandNew;
+	std::atomic<ChunkState> m_state = ChunkState::BrandNew;
 
-	uint m_generated		: 1 = 0;
+	std::atomic<bool> m_generated = false;
+
+	//uint m_generated		: 1 = 0;
 	uint m_meshGenerated	: 1 = 0;
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
+
+	//atomic bool m_renderable
 };

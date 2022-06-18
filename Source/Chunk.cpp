@@ -79,15 +79,18 @@ Chunk::ChunkState Chunk::GetChunkState() const
 	return m_state;
 }
 
-bool Chunk::AreNeighborsGenerated() const
+bool Chunk::ReadyForMeshGeneration() const
 {
-	return (m_neighborGeneratedMask == 0x3f);
+	return (m_neighborGeneratedMask == 0x3f && m_generated);
 }
 
 bool Chunk::Renderable()
 {
-	std::lock_guard lock(m_mutex);
-	return (!IsEmpty() && !IsNoGeo());
+	std::unique_lock lock(m_mutex, std::try_to_lock);
+	if (!lock.owns_lock()) {
+		return false;
+	}
+	return (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
 }
 
 void Chunk::Render(RenderSettings::DrawMode drawMode)
@@ -117,6 +120,8 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 		glEnableVertexAttribArray(1);
 		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(2 * sizeof(glm::vec3)));
 		glEnableVertexAttribArray(2);
+		m_buffersGenerated = true;
+		m_state = ChunkState::Done;
 	}
 
 	glBindVertexArray(m_VAO);
@@ -143,31 +148,23 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 
 bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 {
-	std::lock_guard<std::mutex> lock(m_mutex);
-	// can this even happen is this too redundant
-	if (m_neighbors[face] != neighbor)
+	std::unique_lock lock(m_mutex);
+	m_neighbors[face] = neighbor;
+	if (m_generated)
 	{
-		m_neighbors[face] = neighbor;
-		m_neighborCollectedMask |= 1u << face; // if we unload a chunk, we might not want this to be an |=
-		if (neighbor->m_generated)
-			m_neighborGeneratedMask |= 1u << face;
-		if (m_neighborCollectedMask == 0x3f && m_state == ChunkState::CollectingNeighborRefs)	// might not want to check state here if we unload and reload a chunk?
-		{
-			m_state = ChunkState::WaitingForMeshGeneration;
-			return true;
-		}
+		lock.unlock();
+		neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[face]);
 	}
 	return false;
 }
 
 void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 {
-	std::unique_lock lock(m_mutex);
-	m_neighborGeneratedMask |= 1u << neighbor;
+	//TODO look into atomic load args for these
+	m_neighborGeneratedMask |= 1u << neighbor; // if we unload a chunk, we might not want this to be an |=
 	if (m_neighborGeneratedMask == 0x3f)
 	{
 		m_state = ChunkState::WaitingForMeshGeneration;
-		lock.unlock();
 		m_generateMeshCallback(this);
 	}
 }
@@ -175,7 +172,6 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 void Chunk::GenerateVolume()
 {
 	bool emptyVal = 1;
-	// does this not need to be locked? how does it work when two threads try to write two different variables on the same object. nvm this is fine.
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -195,27 +191,30 @@ void Chunk::GenerateVolume()
 			}
 		}
 	}
+
 	m_mutex.lock();
 	m_state = ChunkState::CollectingNeighborRefs;
-	m_generated = 1;
 	m_empty = emptyVal;
-	Chunk* neighborsCopy[BlockFace::NumFaces];
-	memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
-	m_mutex.unlock();
+	m_generated.store(true);
+
+	//Chunk* neighborsCopy[BlockFace::NumFaces];
+	//// need to copy these so we dont double lock
+	//memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
 
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
-		if (Chunk* neighbor = neighborsCopy[i])
+		if (Chunk* neighbor = m_neighbors[i])
 		{
 			neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
 		}
 	}
+	m_mutex.unlock();
 }
 
 void Chunk::GenerateMesh()
 {
 	std::unique_lock lock(m_mutex);
-	if (IsEmpty() || !m_generated)
+	if (IsEmpty() || !m_generated.load())
 		return;
 
 	m_state = ChunkState::GeneratingMesh;
@@ -259,6 +258,7 @@ bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
 
 void Chunk::GenerateMeshInt()
 {
+	// is this necessary with proper ordering?
 	m_mutex.lock();
 	Chunk* neighborsCopy[BlockFace::NumFaces];
 	memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
