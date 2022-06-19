@@ -184,7 +184,7 @@ void World::ImGuiRender()
 	ImGui::Begin("Demo window");
 	ImGui::Text("Framerate: %d", m_frameRate);
 	glm::vec3 cameraPos = m_camera.GetPosition();
-	ImGui::Text("Position x:%f y:%f z:%f", cameraPos.x, cameraPos.y, cameraPos.z);
+	ImGui::Text("Position x:%.2f y:%.2f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
 	//ImGui::ShowDemoWindow();
 	ImGui::End();

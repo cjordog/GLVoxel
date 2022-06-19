@@ -17,8 +17,8 @@ Camera::Camera(glm::vec3 pos, float pitch, float yaw)
 
 void Camera::Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta)
 {
-	if (glm::length(posDelta) == 0 && pitchDelta == 0 && yawDelta == 0)
-		return;
+	//if (glm::length(posDelta) == 0 && pitchDelta == 0 && yawDelta == 0)
+	//	return;
 
 	m_yaw += yawDelta;
 	m_pitch += pitchDelta;

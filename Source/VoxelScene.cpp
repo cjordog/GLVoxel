@@ -41,10 +41,8 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 	if (Chunk* neighbor = m_chunks[pos + glm::i32vec3(s_blockNormals[side])])
 	{
 		// this might be too slow to wait for locks
-		neighbor->UpdateNeighborRef(oppositeSide, chunk)
-			;// m_generateMeshList.push_back(neighbor);
-		chunk->UpdateNeighborRef(side, neighbor)
-			;// m_generateMeshList.push_back(chunk);
+		neighbor->UpdateNeighborRef(oppositeSide, chunk);
+		chunk->UpdateNeighborRef(side, neighbor);
 	}
 }
 
@@ -56,9 +54,12 @@ void VoxelScene::Update(const glm::vec3& position)
 	if (!RenderSettings::Get().mtEnabled)
 	{
 		Job j;
+		uint count = 0;
 		while (m_threadPool.GetJob(j))
 		{
 			j.func();
+			if (count++ > 100)
+				break;
 		}
 	}
 }
@@ -90,6 +91,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 	//	RenderSettings::Get().deleteMesh = false;
 	//}
 
+	// TODO:: change this to something like looping 0-10, but go both pos and neg on an iteration, so we update outwards
 	int i = 10;
 	for (int j = -i; j <= i; j++)
 	{

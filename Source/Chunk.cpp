@@ -84,13 +84,9 @@ bool Chunk::ReadyForMeshGeneration() const
 	return (m_neighborGeneratedMask == 0x3f && m_generated);
 }
 
-bool Chunk::Renderable()
+bool Chunk::Renderable() const 
 {
-	std::unique_lock lock(m_mutex, std::try_to_lock);
-	if (!lock.owns_lock()) {
-		return false;
-	}
-	return (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
+	return m_renderable;
 }
 
 void Chunk::Render(RenderSettings::DrawMode drawMode)
@@ -148,8 +144,10 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 
 bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 {
+	// can we make neighbors atomic too
 	std::unique_lock lock(m_mutex);
 	m_neighbors[face] = neighbor;
+	// newly generated chunks will never be generated here, have two versions of this function?
 	if (m_generated)
 	{
 		lock.unlock();
@@ -162,7 +160,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 {
 	//TODO look into atomic load args for these
 	m_neighborGeneratedMask |= 1u << neighbor; // if we unload a chunk, we might not want this to be an |=
-	if (m_neighborGeneratedMask == 0x3f)
+	if (m_neighborGeneratedMask == 0x3f && m_state != ChunkState::WaitingForMeshGeneration)
 	{
 		m_state = ChunkState::WaitingForMeshGeneration;
 		m_generateMeshCallback(this);
@@ -172,6 +170,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 void Chunk::GenerateVolume()
 {
 	bool emptyVal = 1;
+	//BlockType voxelPad[CHUNK_UNIT_SIZE][CHUNK_UNIT_SIZE][CHUNK_UNIT_SIZE];
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -196,6 +195,7 @@ void Chunk::GenerateVolume()
 	m_state = ChunkState::CollectingNeighborRefs;
 	m_empty = emptyVal;
 	m_generated.store(true);
+	//memcpy(m_voxels, voxelPad, sizeof(BlockType) * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE);
 
 	//Chunk* neighborsCopy[BlockFace::NumFaces];
 	//// need to copy these so we dont double lock
@@ -205,7 +205,10 @@ void Chunk::GenerateVolume()
 	{
 		if (Chunk* neighbor = m_neighbors[i])
 		{
+			//unlock here or not?
+			m_mutex.unlock();
 			neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
+			m_mutex.lock();
 		}
 	}
 	m_mutex.unlock();
@@ -249,6 +252,8 @@ void Chunk::GenerateMesh()
 
 	m_meshGenerated = 1;
 	m_state = ChunkState::GeneratingBuffers;
+
+	m_renderable = (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
 }
 
 bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
@@ -270,7 +275,7 @@ void Chunk::GenerateMeshInt()
 		// should be guaranteed to have this here. unless maybe an unload? but then we have to bail somehow.
 		if (Chunk* neighborChunk = neighborsCopy[i])
 		{
-			std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
+			//std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
 			if (neighborChunk->m_generated)
 			{
 				for (uint j = 0; j < CHUNK_VOXEL_SIZE; j++)

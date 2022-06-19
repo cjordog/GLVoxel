@@ -45,7 +45,7 @@ public:
 
 	bool IsEmpty() const { return bool(m_empty); }
 	bool IsNoGeo() const { return bool(m_noGeo); }
-	bool Renderable();
+	bool Renderable() const; // can we turn our render chunks back into const Chunk*?
 
 	void Render(RenderSettings::DrawMode drawMode);
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);
@@ -76,8 +76,6 @@ private:
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
-	uint8_t m_neighborCollectedMask = 0;	// we might not need a collected mask anymore? just generated
-	std::atomic<uint8_t> m_neighborGeneratedMask = 0;
 
 	AABB m_AABB;
 	
@@ -89,10 +87,10 @@ private:
 	uint m_VAO = 0;
 
 	std::atomic<ChunkState> m_state = ChunkState::BrandNew;
-
+	std::atomic<uint8_t> m_neighborGeneratedMask = 0;
 	std::atomic<bool> m_generated = false;
+	std::atomic<bool> m_renderable = false;
 
-	//uint m_generated		: 1 = 0;
 	uint m_meshGenerated	: 1 = 0;
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
