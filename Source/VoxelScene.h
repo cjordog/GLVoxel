@@ -41,13 +41,16 @@ public:
 	void AddToMeshListCallback(Chunk* chunk);
 	void AddToRenderListCallback(Chunk* chunk);
 
-	void ValidateChunks();
 
 private:
+#ifdef DEBUG
+	void ValidateChunks();
+#endif
+
 	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
 	std::deque<Chunk*> m_generateMeshList;
 	std::deque<Chunk*> m_generateMeshCallbackList;
-	std::list<Chunk*> m_renderList;
+	std::list<Chunk*> m_renderList;	// even better, generate buffers on main not in render function so these can be const Chunk*
 	std::list<Chunk*> m_renderCallbackList;
 
 	std::mutex m_generateMeshCallbackListMutex;

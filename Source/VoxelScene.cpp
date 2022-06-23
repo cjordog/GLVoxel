@@ -258,6 +258,7 @@ void VoxelScene::AddToRenderListCallback(Chunk* chunk)
 	m_renderCallbackList.push_back(chunk);
 }
 
+#ifdef DEBUG
 void VoxelScene::ValidateChunks()
 {
 	int i = RENDER_DISTANCE - 1;
@@ -286,3 +287,4 @@ void VoxelScene::ValidateChunks()
 		}
 	}
 }
+#endif
