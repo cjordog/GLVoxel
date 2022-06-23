@@ -147,7 +147,6 @@ bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 	// can we make neighbors atomic too
 	std::unique_lock lock(m_mutex);
 	m_neighbors[face] = neighbor;
-	// newly generated chunks will never be generated here, have two versions of this function? wouldnt need to lock in that version either
 	if (m_generated)
 	{
 		lock.unlock();

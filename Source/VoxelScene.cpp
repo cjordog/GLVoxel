@@ -16,7 +16,7 @@
 
 ShaderProgram VoxelScene::s_shaderProgram;
 
-const uint RENDER_DISTANCE = 20;
+const uint RENDER_DISTANCE = 15;
 
 VoxelScene::VoxelScene()
 {
@@ -90,7 +90,6 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 		if (centerChunkPos == lastGeneratedChunkPos)
 			return;
 	}
-	lastGeneratedChunkPos = centerChunkPos;
 
 	int i = currentGenerateRadius;
 	for (int j = -i; j <= i; j++)
@@ -118,6 +117,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 			}
 		}
 	}
+	lastGeneratedChunkPos = centerChunkPos;
 }
 
 void VoxelScene::TestUpdate(const glm::vec3& position)
@@ -185,7 +185,6 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 
 void VoxelScene::GenerateMeshes()
 {
-	// in theory shouldnt actually need to lock this. only need to because render is spinning on all chunks
 	m_generateMeshCallbackListMutex.lock();
 	if (m_generateMeshCallbackList.size())
 		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
