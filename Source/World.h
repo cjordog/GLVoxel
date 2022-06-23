@@ -49,4 +49,6 @@ private:
 	bool m_freezeCamera = false;
 
 	uint m_flags = 0;
+
+	VoxelScene::DebugParams m_debugParams;
 };

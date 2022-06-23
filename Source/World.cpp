@@ -90,7 +90,11 @@ void World::Render()
 void World::Update(float updateTime, InputData* inputData)
 {
 	UpdateCamera(updateTime, inputData);
-	m_voxelScene.Update(m_camera.GetPosition());
+	m_voxelScene.Update(m_camera.GetPosition(), m_debugParams);
+
+	if (m_debugParams.m_validateThisFrame)
+		m_debugParams.m_validateThisFrame = false;
+
 	CalcFrameRate(updateTime);
 }
 
@@ -186,6 +190,7 @@ void World::ImGuiRender()
 	glm::vec3 cameraPos = m_camera.GetPosition();
 	ImGui::Text("Position x:%.2f y:%.2f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
+	ImGui::Checkbox("Validate", &m_debugParams.m_validateThisFrame);
 	//ImGui::ShowDemoWindow();
 	ImGui::End();
 

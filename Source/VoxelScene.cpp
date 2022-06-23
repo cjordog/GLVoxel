@@ -9,6 +9,11 @@
 #include "Camera.h"
 #include <math.h>
 
+// TODO this should only be in debug builds
+#define NOMINMAX
+#include <windows.h>
+//#include <algorithm>
+
 ShaderProgram VoxelScene::s_shaderProgram;
 
 const uint RENDER_DISTANCE = 10;
@@ -30,8 +35,8 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 
 	// TODO:: use smart pointers
 	Chunk* chunk = new Chunk(chunkPos);
-	m_chunks[chunkPos] = chunk;
 	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
+	m_chunks[chunkPos] = chunk;
 	
 	return chunk;
 }
@@ -46,22 +51,25 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 	}
 }
 
-void VoxelScene::Update(const glm::vec3& position)
+void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParams)
 {
 	GenerateChunks(position);
 	GenerateMeshes();
 
-	if (!RenderSettings::Get().mtEnabled)
-	{
-		Job j;
-		uint count = 0;
-		while (m_threadPool.GetJob(j))
-		{
-			j.func();
-			if (count++ > 100)
-				break;
-		}
-	}
+	if (debugParams.m_validateThisFrame)
+		ValidateChunks();
+
+	//if (!RenderSettings::Get().mtEnabled)
+	//{
+	//	Job j;
+	//	uint count = 0;
+	//	while (m_threadPool.GetJob(j))
+	//	{
+	//		j.func();
+	//		if (count++ > 100)
+	//			break;
+	//	}
+	//}
 }
 
 void VoxelScene::GenerateChunks(const glm::vec3& position)
@@ -91,8 +99,11 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 	//	RenderSettings::Get().deleteMesh = false;
 	//}
 
+	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
+	lastGeneratedChunkPos = centerChunkPos;
+
 	// TODO:: change this to something like looping 0-10, but go both pos and neg on an iteration, so we update outwards
-	int i = 10;
+	int i = RENDER_DISTANCE;
 	for (int j = -i; j <= i; j++)
 	{
 		for (int k = -i; k <= i; k++)
@@ -100,9 +111,9 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 			for (int l = -i; l <= i; l++)
 			{
 				glm::i32vec3 chunkPos = glm::i32vec3(
-					j + position.x / float(CHUNK_UNIT_SIZE),
-					k + position.y / float(CHUNK_UNIT_SIZE),
-					l + position.z / float(CHUNK_UNIT_SIZE));
+					j + centerChunkPos.x,
+					k + centerChunkPos.y,
+					l + centerChunkPos.z);
 				if (!m_chunks[chunkPos])
 				{
 					Chunk* newChunk = CreateChunk(chunkPos);
@@ -114,7 +125,6 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 						for (uint m = 0; m < BlockFace::NumFaces; m++)
 						{
 							NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-							// note to self: reads to neighbor ptrs need to be locked. 
 						}
 						//batch submit these?
 						//newChunk->GenerateVolume();
@@ -267,4 +277,33 @@ void VoxelScene::AddToMeshListCallback(Chunk* chunk)
 {
 	std::lock_guard lock(m_GenerateMeshCallbackListMutex);
 	m_generateMeshCallbackList.push_back(chunk);
+}
+
+void VoxelScene::ValidateChunks()
+{
+	int i = RENDER_DISTANCE - 1;
+	for (int j = -i; j <= i; j++)
+	{
+		for (int k = -i; k <= i; k++)
+		{
+			for (int l = -i; l <= i; l++)
+			{
+				glm::i32vec3 chunkPos = glm::i32vec3(
+					j + lastGeneratedChunkPos.x,
+					k + lastGeneratedChunkPos.y,
+					l + lastGeneratedChunkPos.z);
+				if (Chunk* chunk = m_chunks[chunkPos])
+				{
+					chunk->m_mutex.lock();
+					if (chunk->GetChunkState() < Chunk::ChunkState::GeneratingBuffers)
+					{
+						char str[128];
+						sprintf(str, "Chunk x:%i y:%i z:%i state:%u\n", chunkPos.x, chunkPos.y, chunkPos.z, chunk->GetChunkState());
+						OutputDebugString(str);
+					}
+					chunk->m_mutex.unlock();
+				}
+			}
+		}
+	}
 }

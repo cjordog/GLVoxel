@@ -147,7 +147,7 @@ bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 	// can we make neighbors atomic too
 	std::unique_lock lock(m_mutex);
 	m_neighbors[face] = neighbor;
-	// newly generated chunks will never be generated here, have two versions of this function?
+	// newly generated chunks will never be generated here, have two versions of this function? wouldnt need to lock in that version either
 	if (m_generated)
 	{
 		lock.unlock();
@@ -160,7 +160,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 {
 	//TODO look into atomic load args for these
 	m_neighborGeneratedMask |= 1u << neighbor; // if we unload a chunk, we might not want this to be an |=
-	if (m_neighborGeneratedMask == 0x3f && m_state != ChunkState::WaitingForMeshGeneration)
+	if (AllNeighborsGenerated() && m_state == ChunkState::CollectingNeighborRefs)
 	{
 		m_state = ChunkState::WaitingForMeshGeneration;
 		m_generateMeshCallback(this);
@@ -191,10 +191,16 @@ void Chunk::GenerateVolume()
 		}
 	}
 
-	m_mutex.lock();
 	m_state = ChunkState::CollectingNeighborRefs;
-	m_empty = emptyVal;
 	m_generated.store(true);
+	if (AllNeighborsGenerated() && m_state < ChunkState::WaitingForMeshGeneration)
+	{
+		m_state = ChunkState::WaitingForMeshGeneration;
+		m_generateMeshCallback(this);
+	}
+
+	m_mutex.lock();
+	m_empty = emptyVal;
 	//memcpy(m_voxels, voxelPad, sizeof(BlockType) * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE);
 
 	//Chunk* neighborsCopy[BlockFace::NumFaces];
@@ -217,8 +223,17 @@ void Chunk::GenerateVolume()
 void Chunk::GenerateMesh()
 {
 	std::unique_lock lock(m_mutex);
-	if (IsEmpty() || !m_generated.load())
+	if (IsEmpty())
+	{
+		m_state = ChunkState::Done;
 		return;
+	}
+
+	if (!m_generated.load())
+	{
+		assert(1);
+		return;
+	}
 
 	m_state = ChunkState::GeneratingMesh;
 
@@ -244,14 +259,14 @@ void Chunk::GenerateMesh()
 	if (m_vertexCount == 0)
 	{
 		m_noGeo = 1;
+		m_state = ChunkState::Done;
 	}
 	else
 	{
-
+		m_state = ChunkState::GeneratingBuffers;
 	}
 
 	m_meshGenerated = 1;
-	m_state = ChunkState::GeneratingBuffers;
 
 	m_renderable = (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
 }

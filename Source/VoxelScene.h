@@ -18,12 +18,18 @@ class Camera;
 class VoxelScene
 {
 public:
+	// #ifdef DEBUG
+	struct DebugParams
+	{
+		bool m_validateThisFrame = false;
+	};
+
 	VoxelScene();
 
 	static void InitShared();
 
 	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
-	void Update(const glm::vec3& position);
+	void Update(const glm::vec3& position, const DebugParams& debugParams);
 	void GenerateChunks(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
 	void GenerateMeshes();
@@ -34,6 +40,7 @@ public:
 
 	void AddToMeshListCallback(Chunk* chunk);
 
+	void ValidateChunks();
 
 private:
 	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
@@ -50,4 +57,5 @@ private:
 	uint currentGenerateRadius = 3;
 	uint lastGenerateRadius = 0;
 	glm::vec3 lastGeneratePos;
+	glm::i32vec3 lastGeneratedChunkPos;
 };

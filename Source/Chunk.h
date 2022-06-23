@@ -68,6 +68,8 @@ private:
 	void GenerateGreedyMeshInt();
 
 	int ConvertDirToNeighborIndex(const glm::vec3& dir);
+	
+	inline bool AllNeighborsGenerated() { return m_neighborGeneratedMask == 0x3f; }
 
 	// could be a rle instead of 3d array? https://0fps.net/2012/01/14/an-analysis-of-minecraft-like-engines/
 	// hard to tell whats better
