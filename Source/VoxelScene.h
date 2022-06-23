@@ -1,10 +1,9 @@
 #pragma once
 
 #include <unordered_map>
-//#include <unordered_set>
+#include <list>
 #include <deque>
 #include <mutex>
-#include <thread>
 #include <climits>
 
 #include "glm/vec3.hpp"
@@ -40,18 +39,22 @@ public:
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
 
 	void AddToMeshListCallback(Chunk* chunk);
+	void AddToRenderListCallback(Chunk* chunk);
 
 	void ValidateChunks();
 
 private:
 	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
-	// is there any reason these arent just vectors now
 	std::deque<Chunk*> m_generateMeshList;
 	std::deque<Chunk*> m_generateMeshCallbackList;
+	std::list<Chunk*> m_renderList;
+	std::list<Chunk*> m_renderCallbackList;
+
+	std::mutex m_generateMeshCallbackListMutex;
+	std::mutex m_renderCallbackListMutex;
 
 	static ShaderProgram s_shaderProgram;
 
-	std::mutex m_GenerateMeshCallbackListMutex;
 
 	ThreadPool m_threadPool;
 

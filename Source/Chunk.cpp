@@ -81,7 +81,7 @@ Chunk::ChunkState Chunk::GetChunkState() const
 
 bool Chunk::ReadyForMeshGeneration() const
 {
-	return (m_neighborGeneratedMask == 0x3f && m_generated);
+	return (AllNeighborsGenerated() && m_state == WaitingForMeshGeneration);
 }
 
 bool Chunk::Renderable() const 
@@ -277,6 +277,11 @@ void Chunk::GenerateMesh()
 	m_meshGenerated = 1;
 
 	m_renderable = (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
+
+	lock.unlock();
+
+	if (m_renderable)
+		m_renderListCallback(this);
 }
 
 bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const

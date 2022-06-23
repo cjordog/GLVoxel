@@ -16,7 +16,7 @@
 
 ShaderProgram VoxelScene::s_shaderProgram;
 
-const uint RENDER_DISTANCE = 10;
+const uint RENDER_DISTANCE = 20;
 
 VoxelScene::VoxelScene()
 {
@@ -36,6 +36,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 	// TODO:: use smart pointers
 	Chunk* chunk = new Chunk(chunkPos);
 	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
+	chunk->m_renderListCallback = std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1);
 	m_chunks[chunkPos] = chunk;
 	
 	return chunk;
@@ -185,11 +186,11 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 void VoxelScene::GenerateMeshes()
 {
 	// in theory shouldnt actually need to lock this. only need to because render is spinning on all chunks
-	m_GenerateMeshCallbackListMutex.lock();
+	m_generateMeshCallbackListMutex.lock();
 	if (m_generateMeshCallbackList.size())
 		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
 	m_generateMeshCallbackList.clear();
-	m_GenerateMeshCallbackListMutex.unlock();
+	m_generateMeshCallbackListMutex.unlock();
 
 	const uint frameMaxMeshes = m_generateMeshList.size();
 	const uint iterations = std::min(uint(m_generateMeshList.size()), frameMaxMeshes);
@@ -198,21 +199,10 @@ void VoxelScene::GenerateMeshes()
 		Chunk* chunk = m_generateMeshList.front();
 		m_generateMeshList.pop_front();
 
-		std::unique_lock lock(chunk->m_mutex, std::try_to_lock);
-		if (!lock.owns_lock()) {
-			m_generateMeshList.push_back(chunk);
-			continue;
-		}
-
-		Chunk::ChunkState chunkState = chunk->GetChunkState();
-		if (chunkState == Chunk::ChunkState::WaitingForMeshGeneration)
+		if (chunk->ReadyForMeshGeneration())
 		{
-			if (chunk->ReadyForMeshGeneration())
-			{
-				lock.unlock();
-				m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
-				continue;
-			}
+			m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
+			continue;
 		}
 
 		//otherwise re-add to queue to try again later
@@ -228,20 +218,22 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 
 	RenderSettings::DrawMode drawMode = RenderSettings::Get().m_drawMode;
 
-	// should probably shove these into a render list
-	for (auto& item : m_chunks) 
-	{
-		Chunk* chunk = item.second;
-		const glm::vec3& chunkPos = item.first;
+	m_renderCallbackListMutex.lock();
+	if (m_renderCallbackList.size())
+		m_renderList.insert(m_renderList.end(), m_renderCallbackList.begin(), m_renderCallbackList.end());
+	m_renderCallbackList.clear();
+	m_renderCallbackListMutex.unlock();
 
+	for (Chunk* chunk : m_renderList)
+	{
 		if (chunk == nullptr)
 			continue;
 
-		// might want to figure out a way to do this without locking maybe? can use an atomic. assign at end of generateMesh
-		if (!chunk->Renderable())
-			continue;
+		//might need to check this again if we ever want to remove an element
+		//if (!chunk->Renderable())
+		//	continue;
 
-		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunkPos) * float(CHUNK_UNIT_SIZE));
+		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->m_chunkPos) * float(CHUNK_UNIT_SIZE));
 		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), Model))
 		{
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
@@ -257,8 +249,14 @@ glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
 
 void VoxelScene::AddToMeshListCallback(Chunk* chunk)
 {
-	std::lock_guard lock(m_GenerateMeshCallbackListMutex);
+	std::lock_guard lock(m_generateMeshCallbackListMutex);
 	m_generateMeshCallbackList.push_back(chunk);
+}
+
+void VoxelScene::AddToRenderListCallback(Chunk* chunk)
+{
+	std::lock_guard lock(m_renderCallbackListMutex);
+	m_renderCallbackList.push_back(chunk);
 }
 
 void VoxelScene::ValidateChunks()
