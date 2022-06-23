@@ -156,6 +156,14 @@ bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 	return false;
 }
 
+bool Chunk::UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor)
+{
+	// dont need to lock here since chunk hasnt been submitted to threadpool at this point. 
+	// if we can ever delete a chunk while its being worked on then lock this!
+	m_neighbors[face] = neighbor;
+	return false;
+}
+
 void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 {
 	//TODO look into atomic load args for these

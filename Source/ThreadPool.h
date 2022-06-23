@@ -68,11 +68,16 @@ public:
 		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
 	}
 
-	bool GetJob(Job& j)
+	bool GetPoolJob(Job& j)
 	{
 		if (m_workQueue.try_pop(j))
 			return true;
 		return false;
+	}
+
+	int GetSize()
+	{
+		return m_workQueue.size();
 	}
 
 private:

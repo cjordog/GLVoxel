@@ -5,6 +5,7 @@
 #include <deque>
 #include <mutex>
 #include <thread>
+#include <climits>
 
 #include "glm/vec3.hpp"
 #include "Common.h"
@@ -57,5 +58,7 @@ private:
 	uint currentGenerateRadius = 3;
 	uint lastGenerateRadius = 0;
 	glm::vec3 lastGeneratePos;
-	glm::i32vec3 lastGeneratedChunkPos;
+	glm::i32vec3 lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
+
+	bool m_firstFrame = true;
 };

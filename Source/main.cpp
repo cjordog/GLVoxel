@@ -1,3 +1,5 @@
+#define GLM_CONFIG_XYZW_ONLY
+
 #include "Window.h"
 #include "Input.h"
 #include "World.h"

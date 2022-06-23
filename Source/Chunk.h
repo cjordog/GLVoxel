@@ -50,6 +50,7 @@ public:
 	void Render(RenderSettings::DrawMode drawMode);
 	bool UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces]);
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
+	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
 
 	void GenerateVolume();

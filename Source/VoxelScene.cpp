@@ -9,10 +9,10 @@
 #include "Camera.h"
 #include <math.h>
 
-// TODO this should only be in debug builds
+#ifdef DEBUG
 #define NOMINMAX
 #include <windows.h>
-//#include <algorithm>
+#endif
 
 ShaderProgram VoxelScene::s_shaderProgram;
 
@@ -47,7 +47,7 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 	{
 		// this might be too slow to wait for locks
 		neighbor->UpdateNeighborRef(oppositeSide, chunk);
-		chunk->UpdateNeighborRef(side, neighbor);
+		chunk->UpdateNeighborRefNewChunk(side, neighbor);
 	}
 }
 
@@ -56,54 +56,42 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 	GenerateChunks(position);
 	GenerateMeshes();
 
+#ifdef DEBUG
 	if (debugParams.m_validateThisFrame)
 		ValidateChunks();
+#endif
 
-	//if (!RenderSettings::Get().mtEnabled)
-	//{
-	//	Job j;
-	//	uint count = 0;
-	//	while (m_threadPool.GetJob(j))
-	//	{
-	//		j.func();
-	//		if (count++ > 100)
-	//			break;
-	//	}
-	//}
+	if (!RenderSettings::Get().mtEnabled)
+	{
+		Job j;
+		uint count = 0;
+		while (m_threadPool.GetPoolJob(j))
+		{
+			j.func();
+			if (count++ > 100)
+				break;
+		}
+	}
+	m_firstFrame = false;
 }
 
 void VoxelScene::GenerateChunks(const glm::vec3& position)
 {
+	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
+
 	// TODO:: can dynamically update this based on load
 	if (currentGenerateRadius < RENDER_DISTANCE)
+	{
 		currentGenerateRadius++;
-	//TODO:: update with real values
-	//if (glm::length(lastGeneratePos - position) < 0.0f && lastGenerateRadius == currentGenerateRadius)
-	//{
-	//	// do something (nothing)
-	//}
-	//else
-	//{
-	//	lastGeneratePos = position;
-	//	lastGenerateRadius = currentGenerateRadius;
-	//}
-
-	// TODO:: fix this?
-	//if (RenderSettings::Get().deleteMesh)
-	//{
-	//	for (auto& chunk : m_chunks)
-	//	{
-	//		delete chunk.second.chunk;
-	//	}
-	//	m_chunks.clear();
-	//	RenderSettings::Get().deleteMesh = false;
-	//}
-
-	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
+	}
+	else
+	{
+		if (centerChunkPos == lastGeneratedChunkPos)
+			return;
+	}
 	lastGeneratedChunkPos = centerChunkPos;
 
-	// TODO:: change this to something like looping 0-10, but go both pos and neg on an iteration, so we update outwards
-	int i = RENDER_DISTANCE;
+	int i = currentGenerateRadius;
 	for (int j = -i; j <= i; j++)
 	{
 		for (int k = -i; k <= i; k++)
@@ -118,18 +106,13 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 				{
 					Chunk* newChunk = CreateChunk(chunkPos);
 
-					//redundant but w/e
-					if (newChunk)
+					// notify neighbors
+					for (uint m = 0; m < BlockFace::NumFaces; m++)
 					{
-						// notify neighbors
-						for (uint m = 0; m < BlockFace::NumFaces; m++)
-						{
-							NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-						}
-						//batch submit these?
-						//newChunk->GenerateVolume();
-						m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
+						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
 					}
+					//batch submit these?
+					m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
 				}
 			}
 		}
@@ -227,7 +210,6 @@ void VoxelScene::GenerateMeshes()
 			if (chunk->ReadyForMeshGeneration())
 			{
 				lock.unlock();
-				//chunk->GenerateMesh();
 				m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
 				continue;
 			}
