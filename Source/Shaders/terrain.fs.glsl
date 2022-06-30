@@ -11,8 +11,8 @@ vec3 sunDir = { 0.1f, -1.0f, 0.2f };
 void main()
 {
 	const float ambientStrength = 0.3f;
-	const vec3 ambientColor = vec3(1.0f, 0.0f, 0.0f);
-	const vec3 diffuseColor = vec3(1.0f, 0.0f, 0.0f);
+	const vec3 ambientColor = outCol;
+	const vec3 diffuseColor = outCol;
 	sunDir = normalize(sunDir);
 
 	vec3 diffuse = clamp(dot(-sunDir, outNorm), 0.0f, 1.0f) * diffuseColor * (1.0f - ambientStrength);

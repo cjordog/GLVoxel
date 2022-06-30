@@ -10,12 +10,9 @@ typedef unsigned int uint;
 
 #define PI 3.14159f
 
-//#define MY_PRINTF(...) {char cad[512]; sprintf(cad, __VA_ARGS__);  OutputDebugString(cad);}
-
-
 // how many voxels per chunk
-constexpr int CHUNK_VOXEL_SIZE = 8;
-// how many voxels per unit of space
+constexpr int CHUNK_VOXEL_SIZE = 16;
+// how many voxels per unit of space    TODO::this is broken
 constexpr int UNIT_VOXEL_RESOLUTION = 1;
 // how many units does a chunk take up
 constexpr int CHUNK_UNIT_SIZE = CHUNK_VOXEL_SIZE / UNIT_VOXEL_RESOLUTION;

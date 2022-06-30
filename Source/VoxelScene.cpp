@@ -16,7 +16,7 @@
 
 ShaderProgram VoxelScene::s_shaderProgram;
 
-const uint RENDER_DISTANCE = 15;
+const uint RENDER_DISTANCE = 10;
 
 VoxelScene::VoxelScene()
 {
@@ -26,6 +26,7 @@ VoxelScene::VoxelScene()
 void VoxelScene::InitShared()
 {
 	s_shaderProgram = ShaderProgram("terrain.vs.glsl", "terrain.fs.glsl");
+	Chunk::InitShared();
 }
 
 Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)

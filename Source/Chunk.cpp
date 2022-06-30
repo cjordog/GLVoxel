@@ -3,6 +3,9 @@
 #include <iostream>
 #include "glm/gtc/noise.hpp"
 
+
+static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
+
 Chunk::Chunk(const glm::vec3& chunkPos)
 	: m_chunkPos(chunkPos),
 	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE))
@@ -15,11 +18,42 @@ Chunk::Chunk(const glm::vec3& chunkPos)
 	glGenBuffers(1, &m_EBO);
 }
 
-bool Chunk::BlockIsOpaque(BlockType t)
+void Chunk::InitShared()
 {
-	if (t == BlockType::Air)
+	s_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
+	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
+	s_noiseGenerator->SetSource(fnSimplex);
+	s_noiseGenerator->SetOctaveCount(5);
+}
+
+inline bool BlockIsOpaque(Chunk::BlockType t)
+{
+	switch (t)
+	{
+	case Chunk::BlockType::Dirt:
+	case Chunk::BlockType::Grass:
+	case Chunk::BlockType::Stone:
+		return true;
+	default: 
 		return false;
-	return true;
+	}
+	return false;
+}
+
+inline glm::vec3 GetBlockColor(Chunk::BlockType t)
+{
+	switch (t)
+	{
+	case Chunk::BlockType::Dirt:
+		return { 0.7f, 0.39f, 0.11f };
+	case Chunk::BlockType::Grass:
+		return { 0.0f, 0.8f, 0.1f };
+	case Chunk::BlockType::Stone:
+		return { 0.7f, 0.7f, 0.7f };
+	default:
+		return { 1, 0, 0 };
+	}
+	return {1, 0, 0};
 }
 
 static glm::vec3 s_faces[BlockFace::NumFaces][4] =
@@ -126,22 +160,6 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);
 }
 
-//bool Chunk::UpdateNeighborRefs(const Chunk* neighbors[BlockFace::NumFaces])
-//{
-//	bool updated = false;
-//
-//	for (uint i = 0; i < BlockFace::NumFaces; i++)
-//	{
-//		if (neighbors[i] != m_neighbors[i])
-//		{
-//			updated = true;
-//			m_neighbors[i] = neighbors[i];
-//		}
-//	}
-//
-//	return updated;
-//}
-
 bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 {
 	// can we make neighbors atomic too
@@ -176,22 +194,37 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 
 void Chunk::GenerateVolume()
 {
+	constexpr float TERRAIN_HEIGHT = 20.0f;
+	constexpr float DIRT_HEIGHT = 5.0f;
+
+	std::vector<float> noiseOutput(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
+	std::vector<float> noiseOutput2(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
+	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_UNIT_SIZE, m_chunkPos.z * CHUNK_UNIT_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, 1 / 60.f, 1);
+	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_UNIT_SIZE, m_chunkPos.z * CHUNK_UNIT_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, 1 / 60.f, 1337);
+
 	bool emptyVal = 1;
-	//BlockType voxelPad[CHUNK_UNIT_SIZE][CHUNK_UNIT_SIZE][CHUNK_UNIT_SIZE];
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
 		{
+			float height = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				if (y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * float(CHUNK_UNIT_SIZE) >
-					glm::perlin((glm::vec2(m_chunkPos.x, m_chunkPos.z) * float(CHUNK_UNIT_SIZE) + glm::vec2(x, z) / float(UNIT_VOXEL_RESOLUTION)) / 57.f) * 20.f)
+				float noiseVal = noiseOutput[x + CHUNK_VOXEL_SIZE * z] * TERRAIN_HEIGHT;
+				float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z] * DIRT_HEIGHT;
+				if (height > noiseVal)
 				{
 					m_voxels[x][y][z] = BlockType::Air;
 				}
-				else 
+				else
 				{
-					m_voxels[x][y][z] = BlockType::Dirt;
+					float depth = noiseVal - height;
+					if (depth >= 0.0f && depth < 1.0f)
+						m_voxels[x][y][z] = BlockType::Grass;
+					else if (depth > noiseVal2)
+						m_voxels[x][y][z] = BlockType::Dirt;
+					else
+						m_voxels[x][y][z] = BlockType::Stone;
 					emptyVal = 0;
 				}
 			}
@@ -208,11 +241,6 @@ void Chunk::GenerateVolume()
 
 	m_mutex.lock();
 	m_empty = emptyVal;
-	//memcpy(m_voxels, voxelPad, sizeof(BlockType) * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE * CHUNK_UNIT_SIZE);
-
-	//Chunk* neighborsCopy[BlockFace::NumFaces];
-	//// need to copy these so we dont double lock
-	//memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
 
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
@@ -341,7 +369,8 @@ void Chunk::GenerateMeshInt()
 		{
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				if (m_voxels[x][y][z] == BlockType::Dirt)
+				BlockType currentBlockType = m_voxels[x][y][z];
+				if (BlockIsOpaque(currentBlockType))
 				{
 					glm::vec3 offset{ x,y,z };
 					for (uint i = 0; i < BlockFace::NumFaces; i++)
@@ -356,7 +385,7 @@ void Chunk::GenerateMeshInt()
 							neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
 							neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
 						{
-							if (m_voxels[neighborX][neighborY][neighborZ] == BlockType::Dirt)
+							if (BlockIsOpaque(m_voxels[neighborX][neighborY][neighborZ]))
 								continue;
 						}
 						else // were on the edge face of the chunk
@@ -365,14 +394,14 @@ void Chunk::GenerateMeshInt()
 							uint u = (dim + 1) % 3;
 							uint v = (dim + 2) % 3;
 							glm::i32vec3 neighborPos(neighborX, neighborY, neighborZ);
-							if (neighborVoxels[i][neighborPos[u]][neighborPos[v]] == BlockType::Dirt)
+							if (BlockIsOpaque(neighborVoxels[i][neighborPos[u]][neighborPos[v]]))
 								continue;
 						}
 
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, glm::vec3(1.0f, 0.0f, 0.0f), s_blockNormals[i] });
+							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, GetBlockColor(currentBlockType), s_blockNormals[i]});
 						}
 						for (uint j = 0; j < 6; j++)
 						{

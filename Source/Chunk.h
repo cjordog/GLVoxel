@@ -7,6 +7,7 @@
 
 #include "Common.h"
 #include "RenderSettings.h"
+#include <FastNoise/FastNoise.h>
 
 class Chunk
 {
@@ -32,7 +33,9 @@ public:
 		Done
 	};
 
-	bool BlockIsOpaque(BlockType t);
+	static void InitShared();
+
+	//bool BlockIsOpaque(BlockType t);
 
 	float* GetVertexData() { return (float*)(m_vertices.data()); }
 	uint* GetIndexData() { return m_indices.data(); }
@@ -99,6 +102,4 @@ private:
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
-
-	//atomic bool m_renderable
 };
