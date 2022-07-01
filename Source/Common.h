@@ -34,6 +34,7 @@ struct InputData
 	glm::vec3 m_moveInput = glm::vec3(0.0f);
 	glm::vec2 m_mouseInput = glm::vec2(0.0f);
 	glm::vec2 m_mouseButtons = glm::vec2(0.0f);
+	glm::vec2 m_mouseWheel = glm::vec2(0.0f);
 };
 
 struct Vertex

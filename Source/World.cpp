@@ -89,6 +89,7 @@ void World::Render()
 
 void World::Update(float updateTime, InputData* inputData)
 {
+	m_speed += inputData->m_mouseWheel.y * 2.0f;
 	UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_camera.GetPosition(), m_debugParams);
 
@@ -162,7 +163,7 @@ void World::UpdateCamera(float updateTime, InputData* inputData)
 	if (!inputData->m_disableMouseLook)
 	{
 		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-		m_camera.Transform(inputData->m_moveInput * 10.0f * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+		m_camera.Transform(inputData->m_moveInput * m_speed * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
 	}
 
 	m_camera.CalculateFrustum();

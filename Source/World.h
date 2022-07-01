@@ -51,4 +51,6 @@ private:
 	uint m_flags = 0;
 
 	VoxelScene::DebugParams m_debugParams;
+
+	float m_speed = 10.0f;
 };

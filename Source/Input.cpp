@@ -2,6 +2,8 @@
 #include "RenderSettings.h"
 #include <GLFW/glfw3.h>
 
+static glm::vec2 s_mouseWheel = glm::vec2(0, 0);
+
 // used to process events only once, since it gets called once per key event, instead of polling in ProcessEvents
 static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, int mods)
 {
@@ -20,12 +22,18 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 	}
 }
 
+static void MouseWheelCallback(GLFWwindow* window, double xoffset, double yoffset)
+{
+	s_mouseWheel = {xoffset, yoffset};
+}
+
 Input::Input(Window* w)
 	: m_window(w)
 {
 	GLFWwindow* glfwWin = w->GetGLFWWindow();
 	glfwSetInputMode(glfwWin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	glfwSetKeyCallback(glfwWin, KeyCallback);
+	glfwSetScrollCallback(glfwWin, MouseWheelCallback);
 }
 
 void Input::ProcessInput()
@@ -48,6 +56,9 @@ void Input::ProcessInput()
 		m_inputData.m_moveInput.y += 1.0f;
 	if (glfwGetKey(glfwWin, GLFW_KEY_Z) == GLFW_PRESS)
 		m_inputData.m_moveInput.y -= 1.0f;
+	
+	m_inputData.m_mouseWheel = s_mouseWheel;
+	s_mouseWheel = glm::vec2(0, 0);
 
 #ifdef DEBUG
 	//probably could be set once on press and release
@@ -62,7 +73,6 @@ void Input::ProcessInput()
 		glfwSetInputMode(glfwWin, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
 	}
 #endif
-		
 
 	double xpos, ypos;
 	glfwGetCursorPos(glfwWin, &xpos, &ypos);
