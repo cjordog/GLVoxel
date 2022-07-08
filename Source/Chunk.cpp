@@ -2,6 +2,14 @@
 #include <glad/glad.h>
 #include <iostream>
 #include "glm/gtc/noise.hpp"
+#include <algorithm>
+
+float smoothstep(float edge0, float edge1, float x) {
+	// Scale, bias and saturate x to 0..1 range
+	x = std::clamp((x - edge0) / (edge1 - edge0), 0.0f, 1.0f);
+	// Evaluate polynomial
+	return x * x * (3 - 2 * x);
+}
 
 
 static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
@@ -23,7 +31,7 @@ void Chunk::InitShared()
 	s_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
 	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
 	s_noiseGenerator->SetSource(fnSimplex);
-	s_noiseGenerator->SetOctaveCount(5);
+	s_noiseGenerator->SetOctaveCount(4);
 }
 
 inline bool BlockIsOpaque(Chunk::BlockType t)
@@ -37,7 +45,6 @@ inline bool BlockIsOpaque(Chunk::BlockType t)
 	default: 
 		return false;
 	}
-	return false;
 }
 
 inline glm::vec3 GetBlockColor(Chunk::BlockType t)
@@ -53,7 +60,6 @@ inline glm::vec3 GetBlockColor(Chunk::BlockType t)
 	default:
 		return { 1, 0, 0 };
 	}
-	return {1, 0, 0};
 }
 
 static glm::vec3 s_faces[BlockFace::NumFaces][4] =
@@ -194,15 +200,18 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 
 void Chunk::GenerateVolume()
 {
-	constexpr float TERRAIN_HEIGHT = 20.0f;
-	constexpr float DIRT_HEIGHT = 5.0f;
+	constexpr float TERRAIN_HEIGHT = 80.0f;
+	constexpr float DIRT_HEIGHT = 2.0f;
+	constexpr float FREQUENCY = 1 / 200.f;
 
 	std::vector<float> noiseOutput(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
 	std::vector<float> noiseOutput2(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
-	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_UNIT_SIZE, m_chunkPos.z * CHUNK_UNIT_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, 1 / 60.f, 1);
-	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_UNIT_SIZE, m_chunkPos.z * CHUNK_UNIT_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, 1 / 60.f, 1337);
+	// samples once per int, so we pass in bigger positions than our actual worldspace position...
+	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_VOXEL_SIZE, m_chunkPos.z * CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, FREQUENCY / UNIT_VOXEL_RESOLUTION, 1);
+	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_VOXEL_SIZE, m_chunkPos.z * CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, FREQUENCY / UNIT_VOXEL_RESOLUTION, 1337);
 
 	bool emptyVal = 1;
+	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
@@ -210,8 +219,8 @@ void Chunk::GenerateVolume()
 			float height = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				float noiseVal = noiseOutput[x + CHUNK_VOXEL_SIZE * z] * TERRAIN_HEIGHT;
-				float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z] * DIRT_HEIGHT;
+				float noiseVal = smoothstep(-1, 1, noiseOutput[x + CHUNK_VOXEL_SIZE * z]) * TERRAIN_HEIGHT;
+				float noiseVal2 = (noiseOutput2[x + CHUNK_VOXEL_SIZE * z] + 1.0f) * 0.5f * DIRT_HEIGHT;
 				if (height > noiseVal)
 				{
 					m_voxels[x][y][z] = BlockType::Air;
@@ -221,7 +230,7 @@ void Chunk::GenerateVolume()
 					float depth = noiseVal - height;
 					if (depth >= 0.0f && depth < 1.0f)
 						m_voxels[x][y][z] = BlockType::Grass;
-					else if (depth > noiseVal2)
+					else if (depth < noiseVal2 + 1)
 						m_voxels[x][y][z] = BlockType::Dirt;
 					else
 						m_voxels[x][y][z] = BlockType::Stone;
@@ -401,7 +410,7 @@ void Chunk::GenerateMeshInt()
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.push_back(Vertex{ s_faces[i][j] + offset, GetBlockColor(currentBlockType), s_blockNormals[i]});
+							m_vertices.push_back(Vertex{ (s_faces[i][j] + offset) * float(1.0f / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]});
 						}
 						for (uint j = 0; j < 6; j++)
 						{

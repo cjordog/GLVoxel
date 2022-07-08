@@ -233,7 +233,8 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		//if (!chunk->Renderable())
 		//	continue;
 
-		glm::mat4 Model = glm::translate(glm::mat4(1.0f), glm::vec3(chunk->m_chunkPos) * float(CHUNK_UNIT_SIZE));
+		// this can be cached
+		const glm::mat4 Model = glm::translate(glm::mat4(1.0f), chunk->m_chunkPos * float(CHUNK_UNIT_SIZE));
 		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), Model))
 		{
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
