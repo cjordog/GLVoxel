@@ -192,6 +192,7 @@ void World::ImGuiRender()
 	ImGui::Text("Position x:%.2f y:%.2f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
 	ImGui::Checkbox("Validate", &m_debugParams.m_validateThisFrame);
+	ImGui::Text("Rendering %d vertices", VoxelScene::s_numVerts);
 	//ImGui::ShowDemoWindow();
 	ImGui::End();
 

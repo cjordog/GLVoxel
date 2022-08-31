@@ -15,6 +15,7 @@
 #endif
 
 ShaderProgram VoxelScene::s_shaderProgram;
+uint VoxelScene::s_numVerts;
 
 const uint RENDER_DISTANCE = 10;
 
@@ -229,6 +230,8 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		m_renderList.insert(m_renderList.end(), m_renderCallbackList.begin(), m_renderCallbackList.end());
 	m_renderCallbackList.clear();
 	m_renderCallbackListMutex.unlock();
+	
+	uint vertexCount = 0;
 
 	for (Chunk* chunk : m_renderList)
 	{
@@ -244,9 +247,11 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), Model))
 		{
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
+			vertexCount += chunk->GetVertexCount();
 			chunk->Render(drawMode);
 		}
 	}
+	s_numVerts = vertexCount;
 }
 
 glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)

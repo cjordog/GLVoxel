@@ -42,6 +42,8 @@ public:
 	void AddToMeshListCallback(Chunk* chunk);
 	void AddToRenderListCallback(Chunk* chunk);
 
+	static uint s_numVerts;
+
 
 private:
 #ifdef DEBUG
