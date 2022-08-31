@@ -22,6 +22,7 @@ public:
 	struct DebugParams
 	{
 		bool m_validateThisFrame = false;
+		bool m_regenerateWorld = false;
 	};
 
 	VoxelScene();

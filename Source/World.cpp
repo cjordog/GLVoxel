@@ -21,8 +21,8 @@
 ShaderProgram World::shaderProgram1;
 
 World::World()
-	: m_camera(glm::vec3(0, 0, -10), 0, 90.0f),
-	m_frozenCamera(glm::vec3(0, 0, -10), 0, 90.0f),
+	: m_camera(glm::vec3(0, 80, -10), 0, 90.0f),
+	m_frozenCamera(glm::vec3(0, 80, -10), 0, 90.0f),
 	m_voxelScene()
 {
 	m_flags |= WorldFlags::EnableMT;

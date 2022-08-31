@@ -13,6 +13,7 @@ float smoothstep(float edge0, float edge1, float x) {
 
 
 static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
+static FastNoise::SmartNode<FastNoise::FractalRidged> s_noiseGeneratorCave;
 
 Chunk::Chunk(const glm::vec3& chunkPos)
 	: m_chunkPos(chunkPos),
@@ -32,6 +33,11 @@ void Chunk::InitShared()
 	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
 	s_noiseGenerator->SetSource(fnSimplex);
 	s_noiseGenerator->SetOctaveCount(4);
+
+	s_noiseGeneratorCave = FastNoise::New<FastNoise::FractalRidged>();
+	auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
+	s_noiseGeneratorCave->SetSource(fnSimplex2);
+	s_noiseGeneratorCave->SetOctaveCount(1);
 }
 
 inline bool BlockIsOpaque(Chunk::BlockType t)
@@ -204,41 +210,131 @@ void Chunk::GenerateVolume()
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
 
-	std::vector<float> noiseOutput(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
-	std::vector<float> noiseOutput2(CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE);
+	constexpr int domainTurbulence = 10 * UNIT_VOXEL_RESOLUTION;
+
+	const int turbulentRowSize = CHUNK_VOXEL_SIZE + domainTurbulence * 2;
+	float noiseOutput[turbulentRowSize * turbulentRowSize];
+	float noiseOutput2[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	//float noiseOutput3D[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
-	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_VOXEL_SIZE, m_chunkPos.z * CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, FREQUENCY / UNIT_VOXEL_RESOLUTION, 1);
-	s_noiseGenerator->GenUniformGrid2D(noiseOutput.data(), m_chunkPos.x * CHUNK_VOXEL_SIZE, m_chunkPos.z * CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, CHUNK_VOXEL_SIZE, FREQUENCY / UNIT_VOXEL_RESOLUTION, 1337);
+	s_noiseGenerator->GenUniformGrid2D(
+		noiseOutput,
+		m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence,
+		turbulentRowSize,
+		turbulentRowSize,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION,
+		1
+	);
+	s_noiseGenerator->GenUniformGrid2D(
+		noiseOutput2,
+		m_chunkPos.x * CHUNK_VOXEL_SIZE,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE,
+		CHUNK_VOXEL_SIZE,
+		CHUNK_VOXEL_SIZE, 
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20,
+		1337
+	);
+	s_noiseGeneratorCave->GenUniformGrid3D(
+		noiseOutput3,
+		m_chunkPos.x * CHUNK_VOXEL_SIZE,
+		m_chunkPos.y * CHUNK_VOXEL_SIZE,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE,
+		CHUNK_VOXEL_SIZE,
+		CHUNK_VOXEL_SIZE,
+		CHUNK_VOXEL_SIZE,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION,
+		1337
+	);
+	//s_noiseGenerator->GenUniformGrid3D(
+	//	noiseOutput3D,
+	//	m_chunkPos.x * CHUNK_VOXEL_SIZE,
+	//	m_chunkPos.y * CHUNK_VOXEL_SIZE,
+	//	m_chunkPos.z * CHUNK_VOXEL_SIZE,
+	//	CHUNK_VOXEL_SIZE,
+	//	CHUNK_VOXEL_SIZE,
+	//	CHUNK_VOXEL_SIZE,
+	//	FREQUENCY / UNIT_VOXEL_RESOLUTION * 10,
+	//	1337
+	//);
 
 	bool emptyVal = 1;
 	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
-	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
+	for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
 		{
 			float height = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
-			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
+			for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 			{
-				float noiseVal = smoothstep(-1, 1, noiseOutput[x + CHUNK_VOXEL_SIZE * z]) * TERRAIN_HEIGHT;
-				float noiseVal2 = (noiseOutput2[x + CHUNK_VOXEL_SIZE * z] + 1.0f) * 0.5f * DIRT_HEIGHT;
+				//float noiseVal3D = noiseOutput3D[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z];
+				float noiseVal3D = 0;
+				int indexOffset = turbulentRowSize * domainTurbulence + domainTurbulence;
+				int index = int(x + noiseVal3D * domainTurbulence) + int(z + noiseVal3D * domainTurbulence) * turbulentRowSize + indexOffset;
+				float noiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
+
 				if (height > noiseVal)
 				{
 					m_voxels[x][y][z] = BlockType::Air;
 				}
 				else
 				{
-					float depth = noiseVal - height;
-					if (depth >= 0.0f && depth < 1.0f)
-						m_voxels[x][y][z] = BlockType::Grass;
-					else if (depth < noiseVal2 + 1)
-						m_voxels[x][y][z] = BlockType::Dirt;
+					if (noiseOutput3[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z] > 0.8f)
+					{
+						m_voxels[x][y][z] = BlockType::Air;
+					}
 					else
-						m_voxels[x][y][z] = BlockType::Stone;
-					emptyVal = 0;
+					{
+						m_voxels[x][y][z] = BlockType::Grass;
+						emptyVal = 0;
+					}
+					//float depth = noiseVal - height;
+					//if (depth >= 0.0f && depth < 1.0f)
+					//	m_voxels[x][y][z] = BlockType::Grass;
+					//else if (depth < dirtHeight + 1)
+					//	m_voxels[x][y][z] = BlockType::Dirt;
+					//else
+					//	m_voxels[x][y][z] = BlockType::Stone;
 				}
 			}
 		}
 	}
+
+	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
+	{
+		for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
+		{
+			float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z];
+			float dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
+			int currDepth = 0;
+			for (int y = CHUNK_VOXEL_SIZE - 1; y >= 0; y--)
+			{
+				if (m_voxels[x][y][z] == BlockType::Air)
+				{
+					currDepth = 0;
+				}
+				else
+				{
+					currDepth++;
+					if (currDepth <= 1)
+					{
+						m_voxels[x][y][z] = BlockType::Grass;
+					}
+					else if (currDepth <= 2)
+					{
+						m_voxels[x][y][z] = BlockType::Dirt;
+					}
+					else if (currDepth > dirtHeight)
+					{
+						m_voxels[x][y][z] = BlockType::Stone;
+					}
+				}
+			}
+		}
+	}
+
+	
 
 	m_state = ChunkState::CollectingNeighborRefs;
 	m_generated.store(true);

@@ -81,15 +81,21 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 {
 	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
 
-	// TODO:: can dynamically update this based on load
-	if (currentGenerateRadius < RENDER_DISTANCE)
+	if (m_threadPool.GetSize() < 10)
 	{
-		currentGenerateRadius++;
+		if (currentGenerateRadius < RENDER_DISTANCE)
+		{
+			currentGenerateRadius++;
+		}
+		else
+		{
+			if (centerChunkPos == lastGeneratedChunkPos)
+				return;
+		}
 	}
 	else
 	{
-		if (centerChunkPos == lastGeneratedChunkPos)
-			return;
+		return;
 	}
 
 	int i = currentGenerateRadius;
