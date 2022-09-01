@@ -14,7 +14,7 @@ public:
 
 	static RenderSettings& Get();
 	
-	DrawMode m_drawMode;
+	DrawMode m_drawMode = DrawMode::Triangles;
 	bool greedyMesh = false;
 	bool deleteMesh = false;
 	bool mtEnabled = true;

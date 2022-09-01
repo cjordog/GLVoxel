@@ -21,9 +21,9 @@ enum JobPriority : unsigned
 
 struct Job
 {
-	unsigned id;
 	std::function<void()> func;
-	JobPriority priority;
+	unsigned id = 0;
+	JobPriority priority = JobPriority::Priority_Min;
 };
 
 struct JobCmp {
@@ -75,9 +75,14 @@ public:
 		return false;
 	}
 
-	int GetSize()
+	int GetSize() const
 	{
 		return m_workQueue.size();
+	}
+
+	const int GetNumThreads() const
+	{
+		return m_threads.size();
 	}
 
 private:

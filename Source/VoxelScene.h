@@ -26,6 +26,7 @@ public:
 	};
 
 	VoxelScene();
+	~VoxelScene();
 
 	static void InitShared();
 
@@ -70,4 +71,6 @@ private:
 	glm::i32vec3 lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
 
 	bool m_firstFrame = true;
+
+	float* m_chunkScratchpadMem;
 };

@@ -12,7 +12,7 @@
 class Chunk
 {
 public:
-	Chunk(const glm::vec3& chunkPos);
+	Chunk(const glm::vec3& chunkPos, const float* sharedScratchMem);
 
 	enum class BlockType : uint8_t
 	{
@@ -102,4 +102,6 @@ private:
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
+
+	const float* m_sharedScratchMem;
 };

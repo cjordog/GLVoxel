@@ -15,11 +15,11 @@ float smoothstep(float edge0, float edge1, float x) {
 static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
 static FastNoise::SmartNode<FastNoise::FractalRidged> s_noiseGeneratorCave;
 
-Chunk::Chunk(const glm::vec3& chunkPos)
+Chunk::Chunk(const glm::vec3& chunkPos, const float* sharedScratchMem)
 	: m_chunkPos(chunkPos),
-	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE))
+	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE)),
+	m_sharedScratchMem(sharedScratchMem)
 {
-
 	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
 	glGenVertexArrays(1, &m_VAO);

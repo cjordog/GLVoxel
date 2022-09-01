@@ -22,6 +22,13 @@ const uint RENDER_DISTANCE = 10;
 VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
+	m_chunkScratchpadMem = new float[m_threadPool.GetNumThreads() * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+}
+
+VoxelScene::~VoxelScene()
+{
+	delete m_chunkScratchpadMem;
+	// TODO:: delete m_chunks or use smart pointers
 }
 
 void VoxelScene::InitShared()
@@ -36,7 +43,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 		return nullptr;
 
 	// TODO:: use smart pointers
-	Chunk* chunk = new Chunk(chunkPos);
+	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem);
 	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
 	chunk->m_renderListCallback = std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1);
 	m_chunks[chunkPos] = chunk;
