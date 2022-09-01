@@ -15,10 +15,11 @@ float smoothstep(float edge0, float edge1, float x) {
 static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
 static FastNoise::SmartNode<FastNoise::FractalRidged> s_noiseGeneratorCave;
 
-Chunk::Chunk(const glm::vec3& chunkPos, const float* sharedScratchMem)
+Chunk::Chunk(const glm::vec3& chunkPos, float* sharedScratchMem, std::unordered_map<std::thread::id, int>* threadIDs)
 	: m_chunkPos(chunkPos),
 	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE)),
-	m_sharedScratchMem(sharedScratchMem)
+	m_sharedScratchMem(sharedScratchMem),
+	m_threadIDs(threadIDs)
 {
 	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
@@ -215,8 +216,8 @@ void Chunk::GenerateVolume()
 	const int turbulentRowSize = CHUNK_VOXEL_SIZE + domainTurbulence * 2;
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
 	float noiseOutput2[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
-	float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
-	//float noiseOutput3D[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	//float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	float* noiseOutput3 = &m_sharedScratchMem[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * (*m_threadIDs)[std::this_thread::get_id()]];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	s_noiseGenerator->GenUniformGrid2D(
 		noiseOutput,

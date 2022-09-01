@@ -5,6 +5,7 @@
 #include <vector>
 #include <thread>
 #include <functional>
+#include <unordered_map>
 
 #include "RenderSettings.h"
 
@@ -21,8 +22,8 @@ enum JobPriority : unsigned
 
 struct Job
 {
-	std::function<void()> func;
 	unsigned id = 0;
+	std::function<void()> func;
 	JobPriority priority = JobPriority::Priority_Min;
 };
 
@@ -47,7 +48,9 @@ public:
 		{
 			for (unsigned i = 0; i < threadCount; i++)
 			{
-				m_threads.push_back(std::thread(&ThreadPool::WorkerThread, this));
+				std::thread t(&ThreadPool::WorkerThread, this);
+				m_threadIDs[t.get_id()] = i;
+				m_threads.push_back(std::move(t));
 			}
 		}
 		catch (...)
@@ -85,11 +88,17 @@ public:
 		return m_threads.size();
 	}
 
+	std::unordered_map<std::thread::id, int>* GetThreadIDs()
+	{
+		return &m_threadIDs;
+	}
+
 private:
 	std::atomic_bool m_done;
 	Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
 	std::vector<std::thread> m_threads;
 	unsigned jobCount = 0;
+	std::unordered_map<std::thread::id, int> m_threadIDs;
 
 	void WorkerThread()
 	{

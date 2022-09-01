@@ -4,6 +4,8 @@
 #include <vector>
 #include <mutex>
 #include <functional>
+#include <unordered_map>
+#include <thread>
 
 #include "Common.h"
 #include "RenderSettings.h"
@@ -12,7 +14,7 @@
 class Chunk
 {
 public:
-	Chunk(const glm::vec3& chunkPos, const float* sharedScratchMem);
+	Chunk(const glm::vec3& chunkPos, float* sharedScratchMem, std::unordered_map<std::thread::id, int>* threadIDs);
 
 	enum class BlockType : uint8_t
 	{
@@ -103,5 +105,6 @@ private:
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
 
-	const float* m_sharedScratchMem;
+	float* m_sharedScratchMem;
+	std::unordered_map<std::thread::id, int>* m_threadIDs;
 };

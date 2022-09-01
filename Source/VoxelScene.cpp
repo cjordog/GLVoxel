@@ -43,7 +43,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 		return nullptr;
 
 	// TODO:: use smart pointers
-	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem);
+	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem, m_threadPool.GetThreadIDs());
 	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
 	chunk->m_renderListCallback = std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1);
 	m_chunks[chunkPos] = chunk;
