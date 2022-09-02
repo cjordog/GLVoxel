@@ -21,3 +21,5 @@ must be some better way of udpating neighbors during creation. can we not notify
 
 
 have main thread scan over list of chunks. accumulating neighbors m_generated flags into a mask, and then when the mask is full then we call the generate mesh job. the notion of chunks notifying neighbors when theyre done generating is cool but it would require our neighbor pointers to be non-const and also more contention on the locks since we'd need to lock each neighbor to update. might be fine? maybe something to mess around with in the future.
+
+for LODing, if i do something like condensing neighboring voxels 2x2 into 1 for lod N, then you apply some sort of rough normal map texture to fake that extra geo. each LOD normal map frequency becomes 2x, might sort of mask some of the issues with it just looking bigger at a distance, because this almost looks like weird hyperbolic geometry https://www.reddit.com/r/VoxelGameDev/comments/u1uqth/my_first_attempt_to_create_an_octree_based_lod/

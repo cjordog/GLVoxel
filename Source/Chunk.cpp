@@ -216,6 +216,7 @@ void Chunk::GenerateVolume()
 	const int turbulentRowSize = CHUNK_VOXEL_SIZE + domainTurbulence * 2;
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
 	float noiseOutput2[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	// TODO:: do timing tests, which one is faster
 	//float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
 	float* noiseOutput3 = &m_sharedScratchMem[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * (*m_threadIDs)[std::this_thread::get_id()]];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
@@ -266,16 +267,20 @@ void Chunk::GenerateVolume()
 	{
 		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
 		{
-			float height = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
+			float worldSpaceHeight = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
 			for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 			{
+				// this can be one level up. move y inwards
 				//float noiseVal3D = noiseOutput3D[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z];
 				float noiseVal3D = 0;
 				int indexOffset = turbulentRowSize * domainTurbulence + domainTurbulence;
 				int index = int(x + noiseVal3D * domainTurbulence) + int(z + noiseVal3D * domainTurbulence) * turbulentRowSize + indexOffset;
-				float noiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
+				float worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
 
-				if (height > noiseVal)
+				float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z];
+				float dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
+
+				if (worldSpaceHeight > worldSpaceNoiseVal)
 				{
 					m_voxels[x][y][z] = BlockType::Air;
 				}
@@ -288,54 +293,20 @@ void Chunk::GenerateVolume()
 					else
 					{
 						m_voxels[x][y][z] = BlockType::Grass;
+
+						float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION;
+						if (depth >= 0.0f && depth < 1.0f)
+							m_voxels[x][y][z] = BlockType::Grass;
+						else if (depth < dirtHeight + 1)
+							m_voxels[x][y][z] = BlockType::Dirt;
+						else
+							m_voxels[x][y][z] = BlockType::Stone;
 						emptyVal = 0;
 					}
-					//float depth = noiseVal - height;
-					//if (depth >= 0.0f && depth < 1.0f)
-					//	m_voxels[x][y][z] = BlockType::Grass;
-					//else if (depth < dirtHeight + 1)
-					//	m_voxels[x][y][z] = BlockType::Dirt;
-					//else
-					//	m_voxels[x][y][z] = BlockType::Stone;
 				}
 			}
 		}
-	}
-
-	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
-	{
-		for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
-		{
-			float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z];
-			float dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
-			int currDepth = 0;
-			for (int y = CHUNK_VOXEL_SIZE - 1; y >= 0; y--)
-			{
-				if (m_voxels[x][y][z] == BlockType::Air)
-				{
-					currDepth = 0;
-				}
-				else
-				{
-					currDepth++;
-					if (currDepth <= 1)
-					{
-						m_voxels[x][y][z] = BlockType::Grass;
-					}
-					else if (currDepth <= 2)
-					{
-						m_voxels[x][y][z] = BlockType::Dirt;
-					}
-					else if (currDepth > dirtHeight)
-					{
-						m_voxels[x][y][z] = BlockType::Stone;
-					}
-				}
-			}
-		}
-	}
-
-	
+	}	
 
 	m_state = ChunkState::CollectingNeighborRefs;
 	m_generated.store(true);

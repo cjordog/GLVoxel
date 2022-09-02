@@ -1,16 +1,26 @@
-- frustum culling
+X frustum culling
 - cave generation
-- frame timer
-- imgui 
-- block types
+X frame timer
+X imgui 
+X block types
 - all things rendering
+	- lighting
+	- shadows
 - greedy meshing?
 - switch to rle?
 - compute or geo shader for voxel generation?
-- threading
+X threading
 - use profiler for checking cache misses
 - skybox rendering
 - LODing? depends on approach
 - separate update and render into threads
 - some way of seeing chunk borders
 - clean up exit
+- copy shaders/assets into build folder using cmake 
+	https://copyprogramming.com/howto/copying-assets-directory-from-source-to-build-directory-in-cmake
+- chunk unloading
+- maybe look into octrees again? 
+	- https://www.reddit.com/r/VoxelGameDev/comments/u1uqth/my_first_attempt_to_create_an_octree_based_lod/
+- biomes
+- collision
+- water
