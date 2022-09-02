@@ -14,7 +14,23 @@
 class Chunk
 {
 public:
-	Chunk(const glm::vec3& chunkPos, float* sharedScratchMem, std::unordered_map<std::thread::id, int>* threadIDs);
+	struct ChunkGenParams
+	{
+		float caveFrequency = 1;
+
+		bool operator!=(const ChunkGenParams& rhs)
+		{
+			return caveFrequency != rhs.caveFrequency;
+		}
+	};
+
+public:
+	Chunk(
+		const glm::vec3& chunkPos, 
+		float* sharedScratchMem, 
+		std::unordered_map<std::thread::id, int>* threadIDs,
+		const ChunkGenParams* chunkGenParams
+	);
 
 	enum class BlockType : uint8_t
 	{
@@ -57,7 +73,6 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
-
 	void GenerateVolume();
 	void GenerateMesh();
 
@@ -107,4 +122,5 @@ private:
 
 	float* m_sharedScratchMem;
 	std::unordered_map<std::thread::id, int>* m_threadIDs;
+	const ChunkGenParams* m_chunkGenParams;
 };

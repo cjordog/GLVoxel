@@ -27,7 +27,8 @@ private:
 	void UpdateCamera(float updateTime, InputData* inputData);
 #ifdef DEBUG
 	void ImGuiBeginRender();
-	void ImGuiRender();
+	void ImGuiRenderStart();
+	void ImGuiRenderEnd();
 #endif
 
 	static ShaderProgram shaderProgram1;

@@ -15,11 +15,17 @@ float smoothstep(float edge0, float edge1, float x) {
 static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
 static FastNoise::SmartNode<FastNoise::FractalRidged> s_noiseGeneratorCave;
 
-Chunk::Chunk(const glm::vec3& chunkPos, float* sharedScratchMem, std::unordered_map<std::thread::id, int>* threadIDs)
+Chunk::Chunk(
+	const glm::vec3& chunkPos,
+	float* sharedScratchMem,
+	std::unordered_map<std::thread::id, int>* threadIDs,
+	const ChunkGenParams* chunkGenParams
+)
 	: m_chunkPos(chunkPos),
 	m_AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE)),
 	m_sharedScratchMem(sharedScratchMem),
-	m_threadIDs(threadIDs)
+	m_threadIDs(threadIDs),
+	m_chunkGenParams(chunkGenParams)
 {
 	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
@@ -246,7 +252,7 @@ void Chunk::GenerateVolume()
 		CHUNK_VOXEL_SIZE,
 		CHUNK_VOXEL_SIZE,
 		CHUNK_VOXEL_SIZE,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_chunkGenParams->caveFrequency,
 		1337
 	);
 	//s_noiseGenerator->GenUniformGrid3D(

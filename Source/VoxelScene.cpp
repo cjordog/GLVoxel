@@ -1,5 +1,4 @@
 #include "VoxelScene.h"
-#include "Chunk.h"
 #include <glad/glad.h>
 #include <unordered_map>
 #include <unordered_set>
@@ -12,12 +11,19 @@
 #ifdef DEBUG
 #define NOMINMAX
 #include <windows.h>
+#include "imgui_impl_opengl3.h"
+#include "imgui_impl_glfw.h"
 #endif
+
 
 ShaderProgram VoxelScene::s_shaderProgram;
 uint VoxelScene::s_numVerts;
 
+#ifdef DEBUG
 const uint RENDER_DISTANCE = 10;
+#else
+const uint RENDER_DISTANCE = 15;
+#endif
 
 VoxelScene::VoxelScene()
 {
@@ -28,7 +34,8 @@ VoxelScene::VoxelScene()
 VoxelScene::~VoxelScene()
 {
 	delete m_chunkScratchpadMem;
-	// TODO:: delete m_chunks or use smart pointers
+	for (auto& chunk : m_chunks)
+		delete chunk.second;
 }
 
 void VoxelScene::InitShared()
@@ -43,7 +50,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 		return nullptr;
 
 	// TODO:: use smart pointers
-	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem, m_threadPool.GetThreadIDs());
+	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem, m_threadPool.GetThreadIDs(), &m_chunkGenParams);
 	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
 	chunk->m_renderListCallback = std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1);
 	m_chunks[chunkPos] = chunk;
@@ -63,6 +70,11 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 
 void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParams)
 {
+	if (m_chunkGenParams != m_chunkGenParamsNext)
+	{
+		m_chunkGenParams = m_chunkGenParamsNext;
+		ResetVoxelScene();
+	}
 	GenerateChunks(position);
 	GenerateMeshes();
 
@@ -82,7 +94,6 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 				break;
 		}
 	}
-	m_firstFrame = false;
 }
 
 void VoxelScene::GenerateChunks(const glm::vec3& position)
@@ -91,13 +102,13 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 
 	if (m_threadPool.GetSize() < 10)
 	{
-		if (currentGenerateRadius < RENDER_DISTANCE)
+		if (m_currentGenerateRadius < RENDER_DISTANCE)
 		{
-			currentGenerateRadius++;
+			m_currentGenerateRadius++;
 		}
 		else
 		{
-			if (centerChunkPos == lastGeneratedChunkPos)
+			if (centerChunkPos == m_lastGeneratedChunkPos)
 				return;
 		}
 	}
@@ -106,7 +117,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 		return;
 	}
 
-	int i = currentGenerateRadius;
+	int i = m_currentGenerateRadius;
 	for (int j = -i; j <= i; j++)
 	{
 		for (int k = -i; k <= i; k++)
@@ -132,7 +143,7 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 			}
 		}
 	}
-	lastGeneratedChunkPos = centerChunkPos;
+	m_lastGeneratedChunkPos = centerChunkPos;
 }
 
 void VoxelScene::TestUpdate(const glm::vec3& position)
@@ -224,6 +235,25 @@ void VoxelScene::GenerateMeshes()
 	}
 }
 
+void VoxelScene::ResetVoxelScene()
+{
+	m_threadPool.ClearJobPool();
+	m_threadPool.WaitForAllThreadsFinished();
+	for (auto& chunk : m_chunks)
+		delete chunk.second;
+	m_chunks.clear();
+
+	m_generateMeshList.clear();
+	m_generateMeshCallbackList.clear();
+	m_renderList.clear();
+	m_renderCallbackList.clear();
+
+	m_currentGenerateRadius = 3;
+	m_lastGenerateRadius = 0;
+	m_lastGeneratePos = glm::vec3(0, 0, 0);
+	m_lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
+}
+
 void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 {
 	s_shaderProgram.Use();
@@ -261,6 +291,11 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	s_numVerts = vertexCount;
 }
 
+void VoxelScene::RenderImGui()
+{
+	ImGui::SliderFloat("cave frequency", &m_chunkGenParamsNext.caveFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+}
+
 glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
 {
 	return worldPos / float(CHUNK_UNIT_SIZE);
@@ -289,9 +324,9 @@ void VoxelScene::ValidateChunks()
 			for (int l = -i; l <= i; l++)
 			{
 				glm::i32vec3 chunkPos = glm::i32vec3(
-					j + lastGeneratedChunkPos.x,
-					k + lastGeneratedChunkPos.y,
-					l + lastGeneratedChunkPos.z);
+					j + m_lastGeneratedChunkPos.x,
+					k + m_lastGeneratedChunkPos.y,
+					l + m_lastGeneratedChunkPos.z);
 				if (Chunk* chunk = m_chunks[chunkPos])
 				{
 					chunk->m_mutex.lock();

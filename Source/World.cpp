@@ -83,7 +83,9 @@ void World::Render()
 	m_voxelScene.Render(&m_camera, &m_frozenCamera);
 
 #ifdef DEBUG
-	ImGuiRender();
+	ImGuiRenderStart();
+	m_voxelScene.RenderImGui();
+	ImGuiRenderEnd();
 #endif
 }
 
@@ -183,7 +185,7 @@ void World::ImGuiBeginRender()
 	ImGui::NewFrame();
 }
 
-void World::ImGuiRender()
+void World::ImGuiRenderStart()
 {
 	// render your GUI
 	ImGui::Begin("Demo window");
@@ -193,6 +195,10 @@ void World::ImGuiRender()
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
 	ImGui::Checkbox("Validate", &m_debugParams.m_validateThisFrame);
 	ImGui::Text("Rendering %d vertices", VoxelScene::s_numVerts);
+}
+
+void World::ImGuiRenderEnd()
+{
 	//ImGui::ShowDemoWindow();
 	ImGui::End();
 

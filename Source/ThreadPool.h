@@ -40,15 +40,16 @@ public:
 		: m_done(false)
 	{
 		RenderSettings& r = RenderSettings::Get();
-		//r.mtEnabled = false;
 		if (!r.mtEnabled)
 			return;
 		const unsigned threadCount = std::thread::hardware_concurrency();
+		m_numThreads = threadCount;
+		m_working = new std::atomic_bool[threadCount];
 		try
 		{
 			for (unsigned i = 0; i < threadCount; i++)
 			{
-				std::thread t(&ThreadPool::WorkerThread, this);
+				std::thread t(&ThreadPool::WorkerThread, this, i);
 				m_threadIDs[t.get_id()] = i;
 				m_threads.push_back(std::move(t));
 			}
@@ -63,6 +64,7 @@ public:
 	~ThreadPool()
 	{
 		m_done = true;
+		delete[] m_working;
 	}
 
 	template<typename FunctionType>
@@ -78,6 +80,29 @@ public:
 		return false;
 	}
 
+	void ClearJobPool()
+	{
+		m_workQueue.clear();
+	}
+
+	void WaitForAllThreadsFinished()
+	{
+		while (1)
+		{
+			bool success = true;
+			for (int i = 0; i < m_numThreads; i++)
+			{
+				if (m_working[i])
+				{
+					success = false;
+					break;
+				}
+			}
+			if (success)
+				break;
+		}
+	}
+
 	int GetSize() const
 	{
 		return m_workQueue.size();
@@ -85,7 +110,7 @@ public:
 
 	const int GetNumThreads() const
 	{
-		return m_threads.size();
+		return m_numThreads;
 	}
 
 	std::unordered_map<std::thread::id, int>* GetThreadIDs()
@@ -95,26 +120,30 @@ public:
 
 private:
 	std::atomic_bool m_done;
+	std::atomic_bool* m_working;
 	Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
 	std::vector<std::thread> m_threads;
 	unsigned jobCount = 0;
 	std::unordered_map<std::thread::id, int> m_threadIDs;
+	int m_numThreads = 0;
 
-	void WorkerThread()
+	void WorkerThread(int threadID)
 	{
 		while (!m_done)
 		{
 			Job j;
 			if (m_workQueue.try_pop(j))
 			{
+				// is this horrible?
+				m_working[threadID] = true;
 				j.func();
+				m_working[threadID] = false;
 			}
 			else
 			{
 				std::this_thread::yield();
 			}
 		}
+		return;
 	}
 };
-
-//ThreadPool g_threadPool;

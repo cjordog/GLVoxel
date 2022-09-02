@@ -8,6 +8,7 @@
 
 #include "glm/vec3.hpp"
 #include "Common.h"
+#include "Chunk.h"
 #include "glm/gtx/hash.hpp"
 #include "ShaderProgram.h"
 #include "ThreadPool.h"
@@ -35,7 +36,9 @@ public:
 	void GenerateChunks(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
 	void GenerateMeshes();
+	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
+	void RenderImGui();
 	inline void NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace side, BlockFace oppositeSide);
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);
@@ -65,12 +68,12 @@ private:
 
 	ThreadPool m_threadPool;
 
-	uint currentGenerateRadius = 3;
-	uint lastGenerateRadius = 0;
-	glm::vec3 lastGeneratePos;
-	glm::i32vec3 lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
-
-	bool m_firstFrame = true;
+	uint m_currentGenerateRadius = 3;
+	uint m_lastGenerateRadius = 0;
+	glm::vec3 m_lastGeneratePos;
+	glm::i32vec3 m_lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
 
 	float* m_chunkScratchpadMem;
+	Chunk::ChunkGenParams m_chunkGenParams;
+	Chunk::ChunkGenParams m_chunkGenParamsNext;
 };

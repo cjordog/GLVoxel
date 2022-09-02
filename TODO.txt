@@ -24,3 +24,5 @@ X threading
 - biomes
 - collision
 - water
+- world deletion for hot reloading world parameters
+- delete all gl resources on exit
