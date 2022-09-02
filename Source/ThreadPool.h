@@ -64,6 +64,8 @@ public:
 	~ThreadPool()
 	{
 		m_done = true;
+		//?
+		WaitForAllThreadsFinished();
 		delete[] m_working;
 	}
 

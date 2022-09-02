@@ -1,4 +1,5 @@
 #define GLM_CONFIG_XYZW_ONLY
+#define IMGUI_ENABLED
 
 #include "Window.h"
 #include "Input.h"
@@ -9,7 +10,7 @@
 #include <chrono>
 #include <iostream>
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
 #endif
@@ -35,7 +36,7 @@ int main()
 	World::InitShared();
 	world.Init();
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	// Setup Dear ImGui context
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
@@ -64,7 +65,7 @@ int main()
 		input.Poll();
 	}
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	ImGui_ImplOpenGL3_Shutdown();
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();

@@ -11,6 +11,8 @@
 #ifdef DEBUG
 #define NOMINMAX
 #include <windows.h>
+#endif
+#ifdef IMGUI_ENABLED
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
 #endif
@@ -290,11 +292,12 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	}
 	s_numVerts = vertexCount;
 }
-
+#ifdef IMGUI_ENABLED
 void VoxelScene::RenderImGui()
 {
 	ImGui::SliderFloat("cave frequency", &m_chunkGenParamsNext.caveFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 }
+#endif
 
 glm::i32vec3 VoxelScene::ConvertWorldPosToChunkPos(const glm::vec3& worldPos)
 {

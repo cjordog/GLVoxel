@@ -60,7 +60,7 @@ void Input::ProcessInput()
 	m_inputData.m_mouseWheel = s_mouseWheel;
 	s_mouseWheel = glm::vec2(0, 0);
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	//probably could be set once on press and release
 	if (glfwGetKey(glfwWin, GLFW_KEY_LEFT_ALT) == GLFW_PRESS) 
 	{

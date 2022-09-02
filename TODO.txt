@@ -26,3 +26,4 @@ X threading
 - water
 - world deletion for hot reloading world parameters
 - delete all gl resources on exit
+- make IMGUI_DEBUG define in cmake lists

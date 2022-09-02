@@ -13,7 +13,7 @@
 #define STB_IMAGE_IMPLEMENTATION
 #include "stb_image.h"
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 #include "imgui_impl_opengl3.h"
 #include "imgui_impl_glfw.h"
 #endif
@@ -51,7 +51,7 @@ void World::Render()
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	ImGuiBeginRender();
 #endif
 
@@ -82,7 +82,7 @@ void World::Render()
 
 	m_voxelScene.Render(&m_camera, &m_frozenCamera);
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	ImGuiRenderStart();
 	m_voxelScene.RenderImGui();
 	ImGuiRenderEnd();
@@ -176,7 +176,7 @@ void World::UpdateCamera(float updateTime, InputData* inputData)
 	}
 }
 
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 void World::ImGuiBeginRender()
 {
 	// feed inputs to dear imgui, start new frame

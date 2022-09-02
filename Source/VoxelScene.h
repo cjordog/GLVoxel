@@ -38,7 +38,9 @@ public:
 	void GenerateMeshes();
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
+#ifdef IMGUI_ENABLED
 	void RenderImGui();
+#endif
 	inline void NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace side, BlockFace oppositeSide);
 
 	glm::i32vec3 ConvertWorldPosToChunkPos(const glm::vec3& worldPos);

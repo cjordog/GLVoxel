@@ -25,7 +25,7 @@ public:
 private:
 	uint CalcFrameRate(float frameTime);
 	void UpdateCamera(float updateTime, InputData* inputData);
-#ifdef DEBUG
+#ifdef IMGUI_ENABLED
 	void ImGuiBeginRender();
 	void ImGuiRenderStart();
 	void ImGuiRenderEnd();

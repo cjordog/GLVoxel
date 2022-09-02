@@ -6,6 +6,8 @@
 #include <glm/mat4x4.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#define IMGUI_ENABLED
+
 typedef unsigned int uint;
 
 #define PI 3.14159f
