@@ -64,6 +64,7 @@ public:
 	~ThreadPool()
 	{
 		m_done = true;
+		m_workQueue.clear();
 		//?
 		WaitForAllThreadsFinished();
 		delete[] m_working;
