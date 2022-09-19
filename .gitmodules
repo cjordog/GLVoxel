@@ -10,3 +10,6 @@
 [submodule "Libraries/FastNoise2"]
 	path = Libraries/FastNoise2
 	url = https://github.com/Auburn/FastNoise2/
+[submodule "Libraries/tracy"]
+	path = Libraries/tracy
+	url = https://github.com/wolfpld/tracy

@@ -20,6 +20,7 @@ add_subdirectory(Libraries/)
 add_subdirectory(Libraries/glfw/)
 add_subdirectory(Libraries/glm/)
 add_subdirectory(Libraries/FastNoise2/)
+add_subdirectory(Libraries/tracy/)
 
 target_include_directories(${PROJECT_NAME} PUBLIC Libraries/glfw/include)
 
@@ -29,6 +30,7 @@ target_include_directories(${PROJECT_NAME}
 	PUBLIC Source/Shaders/
 	PUBLIC Libraries/glfw/include
 	PUBLIC Libraries/FastNoise2/include
+	PUBLIC Libraries/tracy/public/tracy
 )
 
 # link directories relative to build folder
@@ -38,7 +40,13 @@ target_link_directories(${PROJECT_NAME}
 	PRIVATE Libraries/FastNoise2/src
 )
 
+
 # link libraries
-target_link_libraries(${PROJECT_NAME} glfw glm FastNoise2 imgui glad)
+target_link_libraries(${PROJECT_NAME} glfw glm FastNoise2 imgui glad Tracy::TracyClient )
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GLVoxel)
+
+	#PRIVATE Libraries/tracy/public/common
+	#PRIVATE Libraries/tracy/public/client
+	#PRIVATE Libraries/tracy/public
+
