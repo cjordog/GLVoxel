@@ -115,6 +115,7 @@ struct Frustum
 struct BoundingVolume
 {
 	virtual bool IsInFrustum(const Frustum& camFrustum, const glm::mat4& transform) const = 0;
+	virtual bool IsInFrustumTranslateOnly(const Frustum& camFrustum, const glm::vec3& translate) const = 0;
 };
 
 struct AABB : public BoundingVolume
@@ -165,6 +166,18 @@ struct AABB : public BoundingVolume
 			globalAABB.isOnOrForwardPlan(camFrustum.nearFace) &&
 			globalAABB.isOnOrForwardPlan(camFrustum.farFace));
 	};
+
+	bool IsInFrustumTranslateOnly(const Frustum& camFrustum, const glm::vec3& translate) const override
+	{
+		const AABB globalAABB(translate + center, extents.x, extents.y, extents.z);
+
+		return (globalAABB.isOnOrForwardPlan(camFrustum.leftFace) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.rightFace) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.topFace) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.bottomFace) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.nearFace) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.farFace));
+	}
 
 	bool isOnOrForwardPlan(const Plane& plane) const
 	{

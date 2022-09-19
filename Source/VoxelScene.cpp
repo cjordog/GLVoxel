@@ -35,6 +35,9 @@ VoxelScene::VoxelScene()
 
 VoxelScene::~VoxelScene()
 {
+	m_threadPool.ClearJobPool();
+	m_threadPool.WaitForAllThreadsFinished();
+
 	delete m_chunkScratchpadMem;
 	for (auto& chunk : m_chunks)
 		delete chunk.second;
@@ -272,6 +275,7 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	
 	uint vertexCount = 0;
 
+	glm::mat4 modelMat;
 	for (Chunk* chunk : m_renderList)
 	{
 		if (chunk == nullptr)
@@ -281,11 +285,10 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		//if (!chunk->Renderable())
 		//	continue;
 
-		// this can be cached
-		const glm::mat4 Model = glm::translate(glm::mat4(1.0f), chunk->m_chunkPos * float(CHUNK_UNIT_SIZE));
-		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), Model))
+		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), chunk->m_chunkPos * float(CHUNK_UNIT_SIZE)))
 		{
-			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * Model));
+			chunk->GetModelMat(modelMat);
+			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 			vertexCount += chunk->GetVertexCount();
 			chunk->Render(drawMode);
 		}

@@ -3,6 +3,7 @@
 #include <iostream>
 #include "glm/gtc/noise.hpp"
 #include <algorithm>
+//#include <Tracy.hpp>
 
 float smoothstep(float edge0, float edge1, float x) {
 	// Scale, bias and saturate x to 0..1 range
@@ -27,6 +28,7 @@ Chunk::Chunk(
 	m_threadIDs(threadIDs),
 	m_chunkGenParams(chunkGenParams)
 {
+	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos * float(CHUNK_UNIT_SIZE));
 	//TODO:: need destructors for all this
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
 	glGenVertexArrays(1, &m_VAO);
@@ -394,9 +396,9 @@ void Chunk::GenerateMesh()
 		m_renderListCallback(this);
 }
 
-bool Chunk::IsInFrustum(Frustum f, glm::mat4 modelMat) const
+bool Chunk::IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const
 {
-	return m_AABB.IsInFrustum(f, modelMat);
+	return m_AABB.IsInFrustumTranslateOnly(f, worldPos);
 }
 
 void Chunk::GenerateMeshInt()

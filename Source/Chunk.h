@@ -55,6 +55,7 @@ public:
 
 	//bool BlockIsOpaque(BlockType t);
 
+	void GetModelMat(glm::mat4& mat) { mat = m_modelMat; }
 	float* GetVertexData() { return (float*)(m_vertices.data()); }
 	uint* GetIndexData() { return m_indices.data(); }
 	uint GetVertexCount() { return m_vertexCount; }
@@ -76,7 +77,7 @@ public:
 	void GenerateVolume();
 	void GenerateMesh();
 
-	bool IsInFrustum(Frustum f, glm::mat4 modelMat) const;
+	bool IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const;
 
 	const glm::vec3 m_chunkPos;
 
@@ -102,6 +103,7 @@ private:
 	Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
 
 	AABB m_AABB;
+	glm::mat4 m_modelMat;
 	
 	uint m_vertexCount = 0;
 	uint m_indexCount = 0;
