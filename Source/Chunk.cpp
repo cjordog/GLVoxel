@@ -184,11 +184,11 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 bool Chunk::UpdateNeighborRef(BlockFace face, Chunk* neighbor)
 {
 	// can we make neighbors atomic too
-	std::unique_lock lock(m_mutex);
+	//std::unique_lock lock(m_mutex);
 	m_neighbors[face] = neighbor;
 	if (m_generated)
 	{
-		lock.unlock();
+		//lock.unlock();
 		neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[face]);
 	}
 	return false;

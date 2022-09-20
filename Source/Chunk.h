@@ -100,7 +100,8 @@ private:
 	std::vector<Vertex> m_vertices = std::vector<Vertex>();
 	std::vector<uint> m_indices = std::vector<uint>();
 
-	Chunk* m_neighbors[BlockFace::NumFaces] = { 0 };
+	// testing with these being atomic. dunno if its better/worse/blegh
+	std::atomic<Chunk*> m_neighbors[BlockFace::NumFaces] = { nullptr };
 
 	AABB m_AABB;
 	glm::mat4 m_modelMat;
