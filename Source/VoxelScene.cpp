@@ -17,6 +17,10 @@
 #include "imgui_impl_glfw.h"
 #endif
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 
 ShaderProgram VoxelScene::s_shaderProgram;
 uint VoxelScene::s_numVerts;
@@ -75,6 +79,7 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 
 void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParams)
 {
+	ZoneScoped;
 	if (m_chunkGenParams != m_chunkGenParamsNext)
 	{
 		m_chunkGenParams = m_chunkGenParamsNext;
@@ -103,6 +108,7 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 
 void VoxelScene::GenerateChunks(const glm::vec3& position)
 {
+	ZoneScoped;
 	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
 
 	if (m_threadPool.GetSize() < 10)
@@ -216,6 +222,7 @@ void VoxelScene::TestUpdate(const glm::vec3& position)
 
 void VoxelScene::GenerateMeshes()
 {
+	ZoneScoped;
 	m_generateMeshCallbackListMutex.lock();
 	if (m_generateMeshCallbackList.size())
 		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());

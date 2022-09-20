@@ -18,6 +18,10 @@
 #include "imgui_impl_glfw.h"
 #endif
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 ShaderProgram World::shaderProgram1;
 
 World::World()
@@ -91,6 +95,7 @@ void World::Render()
 
 void World::Update(float updateTime, InputData* inputData)
 {
+	ZoneScoped;
 	m_speed += inputData->m_mouseWheel.y * 2.0f;
 	UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_camera.GetPosition(), m_debugParams);

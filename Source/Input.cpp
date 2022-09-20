@@ -2,6 +2,10 @@
 #include "RenderSettings.h"
 #include <GLFW/glfw3.h>
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 static glm::vec2 s_mouseWheel = glm::vec2(0, 0);
 
 // used to process events only once, since it gets called once per key event, instead of polling in ProcessEvents
@@ -38,6 +42,7 @@ Input::Input(Window* w)
 
 void Input::ProcessInput()
 {
+	ZoneScoped;
 	GLFWwindow* glfwWin = m_window->GetGLFWWindow();
 	if (glfwGetKey(glfwWin, GLFW_KEY_ESCAPE) == GLFW_PRESS)
 		glfwSetWindowShouldClose(glfwWin, true);

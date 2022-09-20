@@ -15,6 +15,10 @@
 #include "imgui_impl_glfw.h"
 #endif
 
+#ifdef TRACY_ENABLE
+#include <tracy/Tracy.hpp>
+#endif
+
 // settings
 const unsigned int SCR_WIDTH = 800;
 const unsigned int SCR_HEIGHT = 600;
@@ -53,6 +57,7 @@ int main()
 
 	while (!window.ShouldClose())
 	{
+		FrameMark;
 		input.ProcessInput();
 
 		auto currentTime = std::chrono::high_resolution_clock::now();

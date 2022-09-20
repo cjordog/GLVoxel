@@ -1,7 +1,10 @@
 cmake_minimum_required(VERSION 3.22.1)
 
 set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CONFIGURATION_TYPES "Debug;Release;Profile" CACHE STRING "" FORCE)
+# -DDEBUG adds macro DEBUG
 set(CMAKE_CXX_FLAGS_DEBUG "${CMAKE_CXX_FLAGS_DEBUG} -DDEBUG")
+set(CMAKE_CXX_FLAGS_PROFILE "${CMAKE_CXX_FLAGS_RELEASE} -DTRACY_ENABLE")
 
 # set the project name
 project(GLVoxel)
@@ -42,7 +45,7 @@ target_link_directories(${PROJECT_NAME}
 
 
 # link libraries
-target_link_libraries(${PROJECT_NAME} glfw glm FastNoise2 imgui glad Tracy::TracyClient )
+target_link_libraries(${PROJECT_NAME} PUBLIC glfw glm FastNoise2 imgui glad Tracy::TracyClient )
 
 set_property(DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR} PROPERTY VS_STARTUP_PROJECT GLVoxel)
 
