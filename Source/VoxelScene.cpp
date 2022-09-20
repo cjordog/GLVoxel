@@ -34,6 +34,7 @@ const uint RENDER_DISTANCE = 15;
 VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
+	m_chunks.reserve(10000);
 	m_chunkScratchpadMem = new float[m_threadPool.GetNumThreads() * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
 }
 
@@ -127,18 +128,19 @@ void VoxelScene::GenerateChunks(const glm::vec3& position)
 	{
 		return;
 	}
-
+	glm::i32vec3 chunkPos = centerChunkPos - glm::i32vec3(m_currentGenerateRadius);
 	int i = m_currentGenerateRadius;
 	for (int j = -i; j <= i; j++)
 	{
+		chunkPos.x++;
+		chunkPos.y = centerChunkPos.y - m_currentGenerateRadius;
 		for (int k = -i; k <= i; k++)
 		{
+			chunkPos.y++;
+			chunkPos.z = centerChunkPos.z - m_currentGenerateRadius;
 			for (int l = -i; l <= i; l++)
 			{
-				glm::i32vec3 chunkPos = glm::i32vec3(
-					j + centerChunkPos.x,
-					k + centerChunkPos.y,
-					l + centerChunkPos.z);
+				chunkPos.z++;
 				if (!m_chunks[chunkPos])
 				{
 					Chunk* newChunk = CreateChunk(chunkPos);
