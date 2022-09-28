@@ -47,6 +47,7 @@ public:
 		m_working = new std::atomic_bool[threadCount];
 		try
 		{
+			m_threadIDs.reserve(threadCount);
 			for (unsigned i = 0; i < threadCount; i++)
 			{
 				std::thread t(&ThreadPool::WorkerThread, this, i);
@@ -116,14 +117,14 @@ public:
 		return m_numThreads;
 	}
 
-	std::unordered_map<std::thread::id, int>* GetThreadIDs()
+	std::unordered_map<std::thread::id, int>& GetThreadIDs()
 	{
-		return &m_threadIDs;
+		return m_threadIDs;
 	}
 
 private:
-	std::atomic_bool m_done;
-	std::atomic_bool* m_working;
+	std::atomic_bool m_done = false;
+	std::atomic_bool* m_working = nullptr;
 	Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
 	std::vector<std::thread> m_threads;
 	unsigned jobCount = 0;

@@ -24,7 +24,10 @@ X threading
 - biomes
 - collision
 - water
-- world deletion for hot reloading world parameters
+X - world deletion for hot reloading world parameters
 - delete all gl resources on exit
 - make IMGUI_DEBUG define in cmake lists
-- try out VerySleepy or Tracy profilers
+X - try out VerySleepy or Tracy profilers
+- if we generate neighboring voxels one block out on each side for our current chunk, we can avoid the entire collecting neighbor refs phase and all the pains that come with that. could just immediately generate meshes after chunk generation too...
+- move culling to a thread. get out of render loop. sort culled chunks
+- occlusion culling

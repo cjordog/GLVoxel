@@ -49,6 +49,7 @@ public:
 	void AddToRenderListCallback(Chunk* chunk);
 
 	static uint s_numVerts;
+	static uint s_numChunks;
 
 
 private:

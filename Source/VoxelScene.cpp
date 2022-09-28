@@ -5,6 +5,7 @@
 #include <iostream>
 #include <glm/vec3.hpp>
 #include <glm/gtc/type_ptr.hpp>
+#include <glm/gtx/norm.hpp>
 #include "Camera.h"
 #include <math.h>
 
@@ -24,6 +25,7 @@
 
 ShaderProgram VoxelScene::s_shaderProgram;
 uint VoxelScene::s_numVerts;
+uint VoxelScene::s_numChunks;
 
 #ifdef DEBUG
 const uint RENDER_DISTANCE = 10;
@@ -35,15 +37,19 @@ VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
 	m_chunks.reserve(10000);
-	m_chunkScratchpadMem = new float[m_threadPool.GetNumThreads() * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	// if we can ever have more than one voxel scene move this.
+	Chunk::InitShared(
+		m_threadPool.GetThreadIDs(),
+		std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1),
+		std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1));
 }
 
 VoxelScene::~VoxelScene()
 {
+	Chunk::DeleteShared();
 	m_threadPool.ClearJobPool();
 	m_threadPool.WaitForAllThreadsFinished();
 
-	delete m_chunkScratchpadMem;
 	for (auto& chunk : m_chunks)
 		delete chunk.second;
 }
@@ -51,7 +57,6 @@ VoxelScene::~VoxelScene()
 void VoxelScene::InitShared()
 {
 	s_shaderProgram = ShaderProgram("terrain.vs.glsl", "terrain.fs.glsl");
-	Chunk::InitShared();
 }
 
 Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
@@ -60,9 +65,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 		return nullptr;
 
 	// TODO:: use smart pointers
-	Chunk* chunk = new Chunk(chunkPos, m_chunkScratchpadMem, m_threadPool.GetThreadIDs(), &m_chunkGenParams);
-	chunk->m_generateMeshCallback = std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1);
-	chunk->m_renderListCallback = std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1);
+	Chunk* chunk = new Chunk(chunkPos, &m_chunkGenParams);
 	m_chunks[chunkPos] = chunk;
 	
 	return chunk;
@@ -270,6 +273,7 @@ void VoxelScene::ResetVoxelScene()
 
 void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 {
+	ZoneNamed(SetupRender, true);
 	s_shaderProgram.Use();
 	glm::mat4 Projection = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
 	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(Projection));
@@ -281,10 +285,18 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 		m_renderList.insert(m_renderList.end(), m_renderCallbackList.begin(), m_renderCallbackList.end());
 	m_renderCallbackList.clear();
 	m_renderCallbackListMutex.unlock();
+
+	// throw this on a thread? 
+	glm::vec3 chunkPos = m_lastGeneratedChunkPos;
+	m_renderList.sort([chunkPos](const Chunk* a, const Chunk* b) 
+		{ return glm::length2(chunkPos - a->m_chunkPos) < glm::length2(chunkPos - b->m_chunkPos); }
+	);
 	
 	uint vertexCount = 0;
+	s_numChunks = 0;
 
 	glm::mat4 modelMat;
+	ZoneNamed(Render, true);
 	for (Chunk* chunk : m_renderList)
 	{
 		if (chunk == nullptr)
@@ -299,6 +311,7 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 			chunk->GetModelMat(modelMat);
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 			vertexCount += chunk->GetVertexCount();
+			s_numChunks++;
 			chunk->Render(drawMode);
 		}
 	}

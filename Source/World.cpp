@@ -52,6 +52,8 @@ bool World::InitShared()
 
 void World::Render()
 {
+	ZoneScoped;
+
 	glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
 	glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
@@ -200,6 +202,7 @@ void World::ImGuiRenderStart()
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
 	ImGui::Checkbox("Validate", &m_debugParams.m_validateThisFrame);
 	ImGui::Text("Rendering %d vertices", VoxelScene::s_numVerts);
+	ImGui::Text("Rendering %d chunks", VoxelScene::s_numChunks);
 }
 
 void World::ImGuiRenderEnd()

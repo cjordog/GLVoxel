@@ -25,12 +25,15 @@ public:
 	};
 
 public:
+	Chunk();
 	Chunk(
-		const glm::vec3& chunkPos, 
-		float* sharedScratchMem, 
-		std::unordered_map<std::thread::id, int>* threadIDs,
+		const glm::vec3& chunkPos,
 		const ChunkGenParams* chunkGenParams
 	);
+	~Chunk();
+
+	void ReleaseResources();
+	void CreateResources(const glm::vec3& chunkPos, uint lod);
 
 	enum class BlockType : uint8_t
 	{
@@ -51,7 +54,8 @@ public:
 		Done
 	};
 
-	static void InitShared();
+	static void InitShared(std::unordered_map<std::thread::id, int>& threadIDs, std::function<void(Chunk*)> generateMeshCallback, std::function<void(Chunk*)> renderListCallback);
+	static void DeleteShared();
 
 	//bool BlockIsOpaque(BlockType t);
 
@@ -75,17 +79,19 @@ public:
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
 	void GenerateVolume();
+	void GenerateVolume2();
 	void GenerateMesh();
 
 	bool IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const;
 
-	const glm::vec3 m_chunkPos;
+	glm::vec3 m_chunkPos = glm::vec3(0, 0, 0);
+	uint m_LOD = 0;
 
 	std::mutex m_mutex;
-	std::function<void(Chunk*)> m_generateMeshCallback;
-	std::function<void(Chunk*)> m_renderListCallback;
 
 private:
+
+	const int CHUNK_VOXEL_SIZE_INT = CHUNK_VOXEL_SIZE + 2;
 
 	void GenerateMeshInt();
 	void GenerateGreedyMeshInt();
@@ -97,6 +103,7 @@ private:
 	// could be a rle instead of 3d array? https://0fps.net/2012/01/14/an-analysis-of-minecraft-like-engines/
 	// hard to tell whats better
 	BlockType m_voxels[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { BlockType(0) };
+	//TODO:: call reserve on these with some sane value
 	std::vector<Vertex> m_vertices = std::vector<Vertex>();
 	std::vector<uint> m_indices = std::vector<uint>();
 
@@ -123,7 +130,5 @@ private:
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
 
-	float* m_sharedScratchMem;
-	std::unordered_map<std::thread::id, int>* m_threadIDs;
-	const ChunkGenParams* m_chunkGenParams;
+	const ChunkGenParams* m_chunkGenParams = nullptr;
 };
