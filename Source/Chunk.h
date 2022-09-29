@@ -89,6 +89,8 @@ public:
 
 	std::mutex m_mutex;
 
+	double m_genTime = 0.0f;
+
 private:
 
 	const int CHUNK_VOXEL_SIZE_INT = CHUNK_VOXEL_SIZE + 2;
@@ -131,4 +133,4 @@ private:
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
 
 	const ChunkGenParams* m_chunkGenParams = nullptr;
-};
+	};

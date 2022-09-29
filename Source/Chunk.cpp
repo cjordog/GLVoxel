@@ -271,6 +271,8 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 
 void Chunk::GenerateVolume()
 {
+	auto startTime = std::chrono::high_resolution_clock::now();
+
 	constexpr float TERRAIN_HEIGHT = 80.0f;
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
@@ -509,6 +511,9 @@ void Chunk::GenerateVolume2()
 
 	m_mutex.lock();
 	m_empty = emptyVal;
+	auto endTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> time = endTime - startTime;
+	m_genTime = time.count();
 
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
@@ -525,6 +530,8 @@ void Chunk::GenerateVolume2()
 
 void Chunk::GenerateMesh()
 {
+	auto startTime = std::chrono::high_resolution_clock::now();
+
 	std::unique_lock lock(m_mutex);
 	if (IsEmpty())
 	{
@@ -577,6 +584,10 @@ void Chunk::GenerateMesh()
 
 	if (m_renderable)
 		s_renderListCallback(this);
+
+	auto endTime = std::chrono::high_resolution_clock::now();
+	std::chrono::duration<double, std::milli> time = endTime - startTime;
+	m_genTime += time.count();
 }
 
 bool Chunk::IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const
@@ -637,7 +648,7 @@ void Chunk::GenerateMeshInt()
 		{
 			for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
 			{
-				BlockType currentBlockType = m_voxels[x][y][z];
+				BlockType currentBlockType = m_voxels[x + 1][y + 1][z + 1];
 				if (BlockIsOpaque(currentBlockType))
 				{
 					glm::vec3 offset{ x,y,z };

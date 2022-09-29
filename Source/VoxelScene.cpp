@@ -24,8 +24,7 @@
 
 
 ShaderProgram VoxelScene::s_shaderProgram;
-uint VoxelScene::s_numVerts;
-uint VoxelScene::s_numChunks;
+VoxelScene::ImguiData VoxelScene::s_imguiData;
 
 #ifdef DEBUG
 const uint RENDER_DISTANCE = 10;
@@ -293,7 +292,8 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	);
 	
 	uint vertexCount = 0;
-	s_numChunks = 0;
+	uint numRenderChunks = 0;
+	double totalGenTime = 0;
 
 	glm::mat4 modelMat;
 	ZoneNamed(Render, true);
@@ -311,15 +311,24 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 			chunk->GetModelMat(modelMat);
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 			vertexCount += chunk->GetVertexCount();
-			s_numChunks++;
+			totalGenTime += chunk->m_genTime;
+			numRenderChunks++;
 			chunk->Render(drawMode);
 		}
 	}
-	s_numVerts = vertexCount;
+	s_imguiData.numTotalChunks = m_chunks.size();
+	s_imguiData.numRenderChunks = numRenderChunks;
+	s_imguiData.numVerts = vertexCount;
+	s_imguiData.avgChunkGenTime = totalGenTime / s_imguiData.numRenderChunks;
 }
 #ifdef IMGUI_ENABLED
 void VoxelScene::RenderImGui()
 {
+	ImGui::Text("%d vertices", s_imguiData.numVerts);
+	ImGui::Text("%d render chunks", s_imguiData.numRenderChunks);
+	ImGui::Text("%d total chunks", s_imguiData.numTotalChunks);
+	ImGui::Text("%f avg gen time", s_imguiData.avgChunkGenTime);
+
 	ImGui::SliderFloat("cave frequency", &m_chunkGenParamsNext.caveFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 }
 #endif
