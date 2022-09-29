@@ -31,3 +31,6 @@ X - try out VerySleepy or Tracy profilers
 - if we generate neighboring voxels one block out on each side for our current chunk, we can avoid the entire collecting neighbor refs phase and all the pains that come with that. could just immediately generate meshes after chunk generation too...
 - move culling to a thread. get out of render loop. sort culled chunks
 - occlusion culling
+- could you actually split each voxel mesh into 6 pieces based on normal during generation, and then only render the sets that face the camera?
+- we are holding a shit ton of data around for empty/full chunks. could optimize?
+- switch thread pool to using condition variables.
