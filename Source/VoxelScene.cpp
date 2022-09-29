@@ -89,7 +89,7 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 		ResetVoxelScene();
 	}
 	GenerateChunks(position);
-	GenerateMeshes();
+	//GenerateMeshes();
 
 #ifdef DEBUG
 	if (debugParams.m_validateThisFrame)

@@ -93,7 +93,7 @@ public:
 
 private:
 
-	const int CHUNK_VOXEL_SIZE_INT = CHUNK_VOXEL_SIZE + 2;
+	static const int INT_CHUNK_VOXEL_SIZE = CHUNK_VOXEL_SIZE + 2;
 
 	void GenerateMeshInt();
 	void GenerateGreedyMeshInt();
@@ -104,7 +104,9 @@ private:
 
 	// could be a rle instead of 3d array? https://0fps.net/2012/01/14/an-analysis-of-minecraft-like-engines/
 	// hard to tell whats better
-	BlockType m_voxels[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { BlockType(0) };
+	// 
+	// maybe dont need to store the extra edges all the time?
+	BlockType m_voxels[INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE] = { BlockType(0) };
 	//TODO:: call reserve on these with some sane value
 	std::vector<Vertex> m_vertices = std::vector<Vertex>();
 	std::vector<uint> m_indices = std::vector<uint>();

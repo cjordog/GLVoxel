@@ -94,7 +94,7 @@ void Chunk::InitShared(std::unordered_map<std::thread::id, int>& threadIDs, std:
 
 	s_threadIDs = threadIDs;
 
-	s_sharedScratchpadMemory = new float[s_threadIDs.size() * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	s_sharedScratchpadMemory = new float[s_threadIDs.size() * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 
 	s_generateMeshCallback = generateMeshCallback;
 	s_renderListCallback = renderListCallback;
@@ -279,17 +279,17 @@ void Chunk::GenerateVolume()
 
 	constexpr int domainTurbulence = 10 * UNIT_VOXEL_RESOLUTION;
 
-	const int turbulentRowSize = CHUNK_VOXEL_SIZE + domainTurbulence * 2;
+	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE + domainTurbulence * 2;
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
-	float noiseOutput2[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
+	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 	// TODO:: do timing tests, which one is faster
 	//float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
-	float* noiseOutput3 = &s_sharedScratchpadMemory[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
+	float* noiseOutput3 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	s_noiseGenerator->GenUniformGrid2D(
 		noiseOutput,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence,
+		m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence - 1,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence - 1,
 		turbulentRowSize,
 		turbulentRowSize,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION,
@@ -297,21 +297,21 @@ void Chunk::GenerateVolume()
 	);
 	s_noiseGenerator->GenUniformGrid2D(
 		noiseOutput2,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE,
-		CHUNK_VOXEL_SIZE,
-		CHUNK_VOXEL_SIZE, 
+		m_chunkPos.x * CHUNK_VOXEL_SIZE - 1,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE - 1,
+		INT_CHUNK_VOXEL_SIZE,
+		INT_CHUNK_VOXEL_SIZE,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20,
 		1337
 	);
 	s_noiseGeneratorCave->GenUniformGrid3D(
 		noiseOutput3,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE,
-		m_chunkPos.y * CHUNK_VOXEL_SIZE,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE,
-		CHUNK_VOXEL_SIZE,
-		CHUNK_VOXEL_SIZE,
-		CHUNK_VOXEL_SIZE,
+		m_chunkPos.x * CHUNK_VOXEL_SIZE - 1,
+		m_chunkPos.y * CHUNK_VOXEL_SIZE - 1,
+		m_chunkPos.z * CHUNK_VOXEL_SIZE - 1,
+		INT_CHUNK_VOXEL_SIZE,
+		INT_CHUNK_VOXEL_SIZE,
+		INT_CHUNK_VOXEL_SIZE,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_chunkGenParams->caveFrequency,
 		1337
 	);
@@ -329,12 +329,12 @@ void Chunk::GenerateVolume()
 
 	bool emptyVal = 1;
 	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
-	for (uint z = 0; z < CHUNK_VOXEL_SIZE; z++)
+	for (int z = 0; z < INT_CHUNK_VOXEL_SIZE; z++)
 	{
-		for (uint y = 0; y < CHUNK_VOXEL_SIZE; y++)
+		for (int y = 0; y < INT_CHUNK_VOXEL_SIZE; y++)
 		{
-			float worldSpaceHeight = y / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
-			for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
+			float worldSpaceHeight = (y - 1) / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
+			for (int x = 0; x < INT_CHUNK_VOXEL_SIZE; x++)
 			{
 				// this can be one level up. move y inwards
 				//float noiseVal3D = noiseOutput3D[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z];
@@ -343,7 +343,7 @@ void Chunk::GenerateVolume()
 				int index = int(x + noiseVal3D * domainTurbulence) + int(z + noiseVal3D * domainTurbulence) * turbulentRowSize + indexOffset;
 				float worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
 
-				float noiseVal2 = noiseOutput2[x + CHUNK_VOXEL_SIZE * z];
+				float noiseVal2 = noiseOutput2[x + INT_CHUNK_VOXEL_SIZE * z];
 				float dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 
 				if (worldSpaceHeight > worldSpaceNoiseVal)
@@ -352,7 +352,7 @@ void Chunk::GenerateVolume()
 				}
 				else
 				{
-					if (noiseOutput3[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z] > 0.8f)
+					if (noiseOutput3[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z] > 0.8f)
 					{
 						m_voxels[x][y][z] = BlockType::Air;
 					}
@@ -374,15 +374,15 @@ void Chunk::GenerateVolume()
 		}
 	}	
 
-	m_state = ChunkState::CollectingNeighborRefs;
+	//m_state = ChunkState::CollectingNeighborRefs;
 	m_generated.store(true);
-	if (AllNeighborsGenerated() && m_state < ChunkState::WaitingForMeshGeneration)
-	{
-		m_state = ChunkState::WaitingForMeshGeneration;
-		s_generateMeshCallback(this);
-	}
+	//if (AllNeighborsGenerated() && m_state < ChunkState::WaitingForMeshGeneration)
+	//{
+	//	m_state = ChunkState::WaitingForMeshGeneration;
+	//	s_generateMeshCallback(this);
+	//}
 
-	m_mutex.lock();
+	//m_mutex.lock();
 	m_empty = emptyVal;
 
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
@@ -400,6 +400,8 @@ void Chunk::GenerateVolume()
 
 void Chunk::GenerateVolume2()
 {
+	auto startTime = std::chrono::high_resolution_clock::now();
+
 	constexpr float TERRAIN_HEIGHT = 80.0f;
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
@@ -501,31 +503,46 @@ void Chunk::GenerateVolume2()
 		}
 	}
 
-	m_state = ChunkState::CollectingNeighborRefs;
-	m_generated.store(true);
-	if (AllNeighborsGenerated() && m_state < ChunkState::WaitingForMeshGeneration)
-	{
-		m_state = ChunkState::WaitingForMeshGeneration;
-		s_generateMeshCallback(this);
-	}
+	//for (uint i = 0; i < BlockFace::NumFaces; i++)
+	//{
+	//	if (Chunk* neighbor = m_neighbors[i])
+	//	{
+	//		//unlock here or not?
+	//		m_mutex.unlock();
+	//		neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
+	//		m_mutex.lock();
+	//	}
+	//}
+	//m_mutex.unlock();
 
-	m_mutex.lock();
+	//m_state = ChunkState::CollectingNeighborRefs;
+	m_generated.store(true);
+	//if (AllNeighborsGenerated() && m_state < ChunkState::WaitingForMeshGeneration)
+	//{
+	//	m_state = ChunkState::WaitingForMeshGeneration;
+	//	s_generateMeshCallback(this);
+	//}
+
+	//m_mutex.lock();
 	m_empty = emptyVal;
+
+	//for (uint i = 0; i < BlockFace::NumFaces; i++)
+	//{
+	//	if (Chunk* neighbor = m_neighbors[i])
+	//	{
+	//		//unlock here or not?
+	//		m_mutex.unlock();
+	//		neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
+	//		m_mutex.lock();
+	//	}
+	//}
+	//m_mutex.unlock();
+
 	auto endTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> time = endTime - startTime;
 	m_genTime = time.count();
 
-	for (uint i = 0; i < BlockFace::NumFaces; i++)
-	{
-		if (Chunk* neighbor = m_neighbors[i])
-		{
-			//unlock here or not?
-			m_mutex.unlock();
-			neighbor->NotifyNeighborOfVolumeGeneration(s_opposingBlockFaces[i]);
-			m_mutex.lock();
-		}
-	}
-	m_mutex.unlock();
+	GenerateMesh();
 }
 
 void Chunk::GenerateMesh()
@@ -597,50 +614,50 @@ bool Chunk::IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const
 
 void Chunk::GenerateMeshInt()
 {
-	// is this necessary with proper ordering?
-	m_mutex.lock();
-	Chunk* neighborsCopy[BlockFace::NumFaces];
-	memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
-	m_mutex.unlock();
-	//cache neighbor voxels so we dont have locking issues later.
-	BlockType neighborVoxels[BlockFace::NumFaces][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE];
-	for (uint i = 0; i < BlockFace::NumFaces; i++)
-	{
-		// should be guaranteed to have this here. unless maybe an unload? but then we have to bail somehow.
-		if (Chunk* neighborChunk = neighborsCopy[i])
-		{
-			//std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
-			if (neighborChunk->m_generated)
-			{
-				for (uint j = 0; j < CHUNK_VOXEL_SIZE; j++)
-				{
-					for (uint k = 0; k < CHUNK_VOXEL_SIZE; k++)
-					{
-						uint dim = i / 2;
-						uint u = (dim + 1) % 3;
-						uint v = (dim + 2) % 3;
-						glm::i32vec3 pos;
-						pos[dim] = (CHUNK_VOXEL_SIZE - 1) * (i % 2);
-						pos[u] = j;
-						pos[v] = k;
+	//// is this necessary with proper ordering?
+	//m_mutex.lock();
+	//Chunk* neighborsCopy[BlockFace::NumFaces];
+	//memcpy(neighborsCopy, m_neighbors, sizeof(Chunk*) * BlockFace::NumFaces);
+	//m_mutex.unlock();
+	////cache neighbor voxels so we dont have locking issues later.
+	//BlockType neighborVoxels[BlockFace::NumFaces][CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE];
+	//for (uint i = 0; i < BlockFace::NumFaces; i++)
+	//{
+	//	// should be guaranteed to have this here. unless maybe an unload? but then we have to bail somehow.
+	//	if (Chunk* neighborChunk = neighborsCopy[i])
+	//	{
+	//		//std::lock_guard<std::mutex> lock(neighborChunk->m_mutex);
+	//		if (neighborChunk->m_generated)
+	//		{
+	//			for (uint j = 0; j < CHUNK_VOXEL_SIZE; j++)
+	//			{
+	//				for (uint k = 0; k < CHUNK_VOXEL_SIZE; k++)
+	//				{
+	//					uint dim = i / 2;
+	//					uint u = (dim + 1) % 3;
+	//					uint v = (dim + 2) % 3;
+	//					glm::i32vec3 pos;
+	//					pos[dim] = (CHUNK_VOXEL_SIZE - 1) * (i % 2);
+	//					pos[u] = j;
+	//					pos[v] = k;
 
-						neighborVoxels[i][j][k] = neighborChunk->GetBlockType(pos.x, pos.y, pos.z);
-					}
-				}
-			}
-			else
-			{
-				assert(false);
-				return;
-			}
-		}
-		else
-		{
-			assert(false);
-			return;
-			// need to bail, think about how to handle this later.
-		}
-	}
+	//					neighborVoxels[i][j][k] = neighborChunk->GetBlockType(pos.x, pos.y, pos.z);
+	//				}
+	//			}
+	//		}
+	//		else
+	//		{
+	//			assert(false);
+	//			return;
+	//		}
+	//	}
+	//	else
+	//	{
+	//		assert(false);
+	//		return;
+	//		// need to bail, think about how to handle this later.
+	//	}
+	//}
 	std::lock_guard lock(m_mutex);
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
@@ -655,27 +672,28 @@ void Chunk::GenerateMeshInt()
 					for (uint i = 0; i < BlockFace::NumFaces; i++)
 					{
 						const glm::vec normal = s_blockNormals[i];
-						int neighborX = x + normal.x;
-						int neighborY = y + normal.y;
-						int neighborZ = z + normal.z;
+						int neighborX = x + normal.x + 1;
+						int neighborY = y + normal.y + 1;
+						int neighborZ = z + normal.z + 1;
 
-						// if we're not checking an edge face
-						if (!(neighborX < 0 || neighborX >= CHUNK_VOXEL_SIZE ||
-							neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
-							neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
-						{
+
+						//// if we're not checking an edge face
+						//if (!(neighborX < 0 || neighborX >= CHUNK_VOXEL_SIZE ||
+						//	neighborY < 0 || neighborY >= CHUNK_VOXEL_SIZE ||
+						//	neighborZ < 0 || neighborZ >= CHUNK_VOXEL_SIZE))
+						//{
 							if (BlockIsOpaque(m_voxels[neighborX][neighborY][neighborZ]))
 								continue;
-						}
-						else // were on the edge face of the chunk
-						{
-							uint dim = i / 2;
-							uint u = (dim + 1) % 3;
-							uint v = (dim + 2) % 3;
-							glm::i32vec3 neighborPos(neighborX, neighborY, neighborZ);
-							if (BlockIsOpaque(neighborVoxels[i][neighborPos[u]][neighborPos[v]]))
-								continue;
-						}
+						//}
+						//else // were on the edge face of the chunk
+						//{
+						//	uint dim = i / 2;
+						//	uint u = (dim + 1) % 3;
+						//	uint v = (dim + 2) % 3;
+						//	glm::i32vec3 neighborPos(neighborX, neighborY, neighborZ);
+						//	if (BlockIsOpaque(neighborVoxels[i][neighborPos[u]][neighborPos[v]]))
+						//		continue;
+						//}
 
 						// add faces
 						for (uint j = 0; j < 4; j++)
