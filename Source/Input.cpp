@@ -24,6 +24,12 @@ static void KeyCallback(GLFWwindow* window, int key, int scancode, int action, i
 		renderSettings.greedyMesh = !renderSettings.greedyMesh;
 		renderSettings.deleteMesh = true;
 	}
+
+	if (key == GLFW_KEY_F && action == GLFW_PRESS)
+	{
+		RenderSettings& renderSettings = RenderSettings::Get();
+		renderSettings.renderDebugWireframes = !renderSettings.renderDebugWireframes;
+	}
 }
 
 static void MouseWheelCallback(GLFWwindow* window, double xoffset, double yoffset)

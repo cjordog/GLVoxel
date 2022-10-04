@@ -39,11 +39,16 @@ struct InputData
 	glm::vec2 m_mouseWheel = glm::vec2(0.0f);
 };
 
-struct Vertex
+struct VertexPCN
 {
 	glm::vec3 position;
 	glm::vec3 color;
 	glm::vec3 normal;
+};
+
+struct VertexP
+{
+	glm::vec3 position;
 };
 
 enum BlockFace : uint8_t
@@ -74,6 +79,91 @@ const static glm::vec3 s_blockNormals[BlockFace::NumFaces] = {
 	{ 0, -1, 0 },	// Bottom
 	{ 0, 0, 1 },	// Front 
 	{ 0, 0, -1 },	// Back
+};
+
+static glm::vec3 s_faces[BlockFace::NumFaces][4] =
+{
+	{	// right
+		{1.0f,	1.0f,	0.0f},
+		{1.0f,	0.0f,	0.0f},
+		{1.0f,	0.0f,	1.0f},
+		{1.0f,	1.0f,	1.0f}
+	},
+	{	// Left
+		{0.0f,	1.0f,	1.0f},
+		{0.0f,	0.0f,	1.0f},
+		{0.0f,	0.0f,	0.0f},
+		{0.0f,	1.0f,	0.0f}
+	},
+	{	// Top
+		{1.0f,	1.0f,	0.0f},
+		{1.0f,	1.0f,	1.0f},
+		{0.0f,	1.0f,	1.0f},
+		{0.0f,	1.0f,	0.0f}
+	},
+	{	// Bottom
+		{0.0f,	0.0f,	0.0f},
+		{0.0f,	0.0f,	1.0f},
+		{1.0f,	0.0f,	1.0f},
+		{1.0f,	0.0f,	0.0f}
+	},
+	{	// Front
+		{1.0f,	1.0f,	1.0f},
+		{1.0f,  0.0f,	1.0f},
+		{0.0f,	0.0f,	1.0f},
+		{0.0f,	1.0f,	1.0f}
+	},
+	{	// Back
+		{0.0f,	1.0f,	0.0f},
+		{0.0f,	0.0f,	0.0f},
+		{1.0f,	0.0f,	0.0f},
+		{1.0f,	1.0f,	0.0f}
+	},
+};
+
+static glm::vec3 s_centeredFaces[BlockFace::NumFaces][4] =
+{
+	{	// right
+		{1.0f,	1.0f,	-1.0f},
+		{1.0f,	-1.0f,	-1.0f},
+		{1.0f,	-1.0f,	1.0f},
+		{1.0f,	1.0f,	1.0f}
+	},
+	{	// Left
+		{-1.0f,	1.0f,	1.0f},
+		{-1.0f,	-1.0f,	1.0f},
+		{-1.0f,	-1.0f,	-1.0f},
+		{-1.0f,	1.0f,	-1.0f}
+	},
+	{	// Top
+		{1.0f,	1.0f,	-1.0f},
+		{1.0f,	1.0f,	1.0f},
+		{-1.0f,	1.0f,	1.0f},
+		{-1.0f,	1.0f,	-1.0f}
+	},
+	{	// Bottom
+		{-1.0f,	-1.0f,	-1.0f},
+		{-1.0f,	-1.0f,	1.0f},
+		{1.0f,	-1.0f,	1.0f},
+		{1.0f,	-1.0f,	-1.0f}
+	},
+	{	// Front
+		{1.0f,	1.0f,	1.0f},
+		{1.0f,  -1.0f,	1.0f},
+		{-1.0f,	-1.0f,	1.0f},
+		{-1.0f,	1.0f,	1.0f}
+	},
+	{	// Back
+		{-1.0f,	1.0f,	-1.0f},
+		{-1.0f,	-1.0f,	-1.0f},
+		{1.0f,	-1.0f,	-1.0f},
+		{1.0f,	1.0f,	-1.0f}
+	},
+};
+
+static uint s_indices[] = {
+	0, 3, 1,
+	1, 3, 2
 };
 
 struct Plane
@@ -116,6 +206,7 @@ struct BoundingVolume
 {
 	virtual bool IsInFrustum(const Frustum& camFrustum, const glm::mat4& transform) const = 0;
 	virtual bool IsInFrustumTranslateOnly(const Frustum& camFrustum, const glm::vec3& translate) const = 0;
+	virtual bool IsInFrustumWorldspace(const Frustum& camFrustum) const = 0;
 };
 
 struct AABB : public BoundingVolume
@@ -179,6 +270,16 @@ struct AABB : public BoundingVolume
 			globalAABB.isOnOrForwardPlan(camFrustum.bottomFace) &&
 			globalAABB.isOnOrForwardPlan(camFrustum.nearFace) &&
 			globalAABB.isOnOrForwardPlan(camFrustum.farFace));
+	}
+
+	bool IsInFrustumWorldspace(const Frustum& camFrustum) const override
+	{
+		return (isOnOrForwardPlan(camFrustum.leftFace) &&
+			isOnOrForwardPlan(camFrustum.rightFace) &&
+			isOnOrForwardPlan(camFrustum.topFace) &&
+			isOnOrForwardPlan(camFrustum.bottomFace) &&
+			isOnOrForwardPlan(camFrustum.nearFace) &&
+			isOnOrForwardPlan(camFrustum.farFace));
 	}
 
 	bool isOnOrForwardPlan(const Plane& plane) const

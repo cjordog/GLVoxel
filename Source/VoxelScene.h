@@ -10,6 +10,7 @@
 #include "Common.h"
 #include "Chunk.h"
 #include "glm/gtx/hash.hpp"
+#include "Octree.h"
 #include "ShaderProgram.h"
 #include "ThreadPool.h"
 
@@ -59,11 +60,16 @@ public:
 
 
 private:
+	void FillBoundingBoxBuffer(const AABB& aabb);
+	void GatherBoundingBoxes();
+	void RenderDebugBoundingBoxes(const Camera* camera, const Camera* debugCullCamera);
 #ifdef DEBUG
 	void ValidateChunks();
 #endif
 
+	Octree m_octree;
 	std::unordered_map<glm::i32vec3, Chunk*> m_chunks;
+
 	std::deque<Chunk*> m_generateMeshList;
 	std::deque<Chunk*> m_generateMeshCallbackList;
 	std::list<Chunk*> m_renderList;	// even better, generate buffers on main not in render function so these can be const Chunk*
@@ -72,8 +78,8 @@ private:
 	std::mutex m_generateMeshCallbackListMutex;
 	std::mutex m_renderCallbackListMutex;
 
-	static ShaderProgram s_shaderProgram;
-
+	static ShaderProgram s_chunkShaderProgram;
+	static ShaderProgram s_debugWireframeShaderProgram;
 
 	ThreadPool m_threadPool;
 
@@ -85,4 +91,18 @@ private:
 	float* m_chunkScratchpadMem;
 	Chunk::ChunkGenParams m_chunkGenParams;
 	Chunk::ChunkGenParams m_chunkGenParamsNext;
+
+	uint m_chunkVAO = 0;
+	uint m_debugWireframeVAO = 0;
+	uint m_aabbVBO = 0;
+	uint m_aabbEBO = 0;
+
+	std::vector<VertexP> m_aabbVerts;
+	std::vector<uint> m_aabbIndices;
+	uint m_aabbVertexCount;
+	uint m_aabbIndexCount;
+
+	bool m_useOctree = true;
+	std::vector<Chunk*> m_frameChunks;
+	glm::mat4 m_projMat;
 };

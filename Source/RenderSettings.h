@@ -16,6 +16,7 @@ public:
 	
 	DrawMode m_drawMode = DrawMode::Triangles;
 	bool greedyMesh = false;
+	bool renderDebugWireframes = false;
 	bool deleteMesh = false;
 	bool mtEnabled = true;
 

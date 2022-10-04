@@ -22,6 +22,8 @@ static float* s_sharedScratchpadMemory;
 static std::function<void(Chunk*)> s_generateMeshCallback;
 static std::function<void(Chunk*)> s_renderListCallback;
 
+static const Chunk::ChunkGenParams* s_chunkGenParams = nullptr;
+
 Chunk::Chunk()
 {
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
@@ -32,14 +34,12 @@ Chunk::Chunk()
 
 Chunk::Chunk(
 	const glm::vec3& chunkPos,
-	const ChunkGenParams* chunkGenParams
+	uint lod
+	//const ChunkGenParams* chunkGenParams
 )
 	: Chunk()
 {
-	m_chunkPos = chunkPos;
-	m_AABB = AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE));
-	m_chunkGenParams = chunkGenParams;
-	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos * float(CHUNK_UNIT_SIZE));
+	CreateResources(chunkPos, lod);
 }
 
 Chunk::~Chunk()
@@ -66,21 +66,28 @@ void Chunk::ReleaseResources()
 	m_renderable = false;
 
 	m_meshGenerated = 0;
-	m_buffersGenerated= 0;
-	m_empty= 1;
-	m_noGeo= 0;
+	m_buffersGenerated = 0;
+	m_empty = 1;
+	m_noGeo = 0;
 }
 
 void Chunk::CreateResources(const glm::vec3& chunkPos, uint lod)
 {
-	m_LOD = lod;
 	m_chunkPos = chunkPos;
-	m_AABB = AABB(glm::vec3(0, 0, 0), glm::vec3(CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE, CHUNK_UNIT_SIZE) * float(1u << lod));
+	m_LOD = lod;
+	m_scale = float(1u << lod);
+	glm::vec3 worldSpacePos = chunkPos * float(CHUNK_UNIT_SIZE);
+	m_AABB = AABB(worldSpacePos, worldSpacePos + glm::vec3(CHUNK_UNIT_SIZE * m_scale));
 
 	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos * float(CHUNK_UNIT_SIZE));
 }
 
-void Chunk::InitShared(std::unordered_map<std::thread::id, int>& threadIDs, std::function<void(Chunk*)> generateMeshCallback, std::function<void(Chunk*)> renderListCallback)
+void Chunk::InitShared(
+	std::unordered_map<std::thread::id, int>& threadIDs,
+	std::function<void(Chunk*)> generateMeshCallback,
+	std::function<void(Chunk*)> renderListCallback,
+	const ChunkGenParams* chunkGenParams
+)
 {
 	s_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
 	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
@@ -98,6 +105,8 @@ void Chunk::InitShared(std::unordered_map<std::thread::id, int>& threadIDs, std:
 
 	s_generateMeshCallback = generateMeshCallback;
 	s_renderListCallback = renderListCallback;
+
+	s_chunkGenParams = chunkGenParams;
 }
 
 void Chunk::DeleteShared()
@@ -133,51 +142,6 @@ inline glm::vec3 GetBlockColor(Chunk::BlockType t)
 	}
 }
 
-static glm::vec3 s_faces[BlockFace::NumFaces][4] =
-{
-	{	// right
-		{1.0f,	1.0f,	0.0f},
-		{1.0f,	0.0f,	0.0f},
-		{1.0f,	0.0f,	1.0f},
-		{1.0f,	1.0f,	1.0f}
-	},
-	{	// Left
-		{0.0f,	1.0f,	1.0f},
-		{0.0f,	0.0f,	1.0f},
-		{0.0f,	0.0f,	0.0f},
-		{0.0f,	1.0f,	0.0f}
-	},
-	{	// Top
-		{1.0f,	1.0f,	0.0f},
-		{1.0f,	1.0f,	1.0f},
-		{0.0f,	1.0f,	1.0f},
-		{0.0f,	1.0f,	0.0f}
-	},
-	{	// Bottom
-		{0.0f,	0.0f,	0.0f},
-		{0.0f,	0.0f,	1.0f},
-		{1.0f,	0.0f,	1.0f},
-		{1.0f,	0.0f,	0.0f}
-	},
-	{	// Front
-		{1.0f,	1.0f,	1.0f},
-		{1.0f,  0.0f,	1.0f},
-		{0.0f,	0.0f,	1.0f},
-		{0.0f,	1.0f,	1.0f}
-	},
-	{	// Back
-		{0.0f,	1.0f,	0.0f},
-		{0.0f,	0.0f,	0.0f},
-		{1.0f,	0.0f,	0.0f},
-		{1.0f,	1.0f,	0.0f}
-	},
-};
-
-static uint s_indices[] = {
-	0, 3, 1,
-	1, 3, 2
-};
-
 Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 {
 	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE)
@@ -211,27 +175,25 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 	if (!m_meshGenerated)
 		return;
 
+	//glBindVertexBuffer(0, m_VBO);
 	//maybe shouldnt be in render?
 	if (!m_buffersGenerated)
 	{
-		glBindVertexArray(m_VAO);
+		//glBindVertexArray(m_VAO);
 
 		glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(VertexPCN), (float*)m_vertices.data(), GL_STATIC_DRAW);
+		//glNamedBufferSubData(m_VBO, 0, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data());
 		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
 		glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
 
-		glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)0);
-		glEnableVertexAttribArray(0);
-		glVertexAttribPointer(1, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(sizeof(glm::vec3)));
-		glEnableVertexAttribArray(1);
-		glVertexAttribPointer(2, 3, GL_FLOAT, GL_FALSE, sizeof(Vertex), (void*)(2 * sizeof(glm::vec3)));
-		glEnableVertexAttribArray(2);
 		m_buffersGenerated = true;
 		m_state = ChunkState::Done;
 	}
+	glBindVertexBuffer(0, m_VBO, 0, sizeof(VertexPCN));
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
 
-	glBindVertexArray(m_VAO);
+	//glBindVertexArray(m_VAO);
 
 	uint dm = (drawMode == RenderSettings::DrawMode::Triangles ? GL_TRIANGLES : GL_LINES);
 	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);
@@ -277,55 +239,42 @@ void Chunk::GenerateVolume()
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
 
-	constexpr int domainTurbulence = 10 * UNIT_VOXEL_RESOLUTION;
+	constexpr int domainTurbulence = 0;// 10 * UNIT_VOXEL_RESOLUTION;
 
 	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE + domainTurbulence * 2;
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
 	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
-	// TODO:: do timing tests, which one is faster
-	//float noiseOutput3[CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE];
 	float* noiseOutput3 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	s_noiseGenerator->GenUniformGrid2D(
 		noiseOutput,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence - 1,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence - 1,
+		(m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
+		(m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
 		turbulentRowSize,
 		turbulentRowSize,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale,
 		1
 	);
 	s_noiseGenerator->GenUniformGrid2D(
 		noiseOutput2,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE - 1,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE - 1,
+		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
+		(m_chunkPos.z * CHUNK_VOXEL_SIZE - 1) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
 		1337
 	);
 	s_noiseGeneratorCave->GenUniformGrid3D(
 		noiseOutput3,
-		m_chunkPos.x * CHUNK_VOXEL_SIZE - 1,
-		m_chunkPos.y * CHUNK_VOXEL_SIZE - 1,
-		m_chunkPos.z * CHUNK_VOXEL_SIZE - 1,
+		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
+		(m_chunkPos.y * CHUNK_VOXEL_SIZE - 1) / m_scale,
+		(m_chunkPos.z * CHUNK_VOXEL_SIZE - 1) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_chunkGenParams->caveFrequency,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * s_chunkGenParams->caveFrequency * m_scale,
 		1337
 	);
-	//s_noiseGenerator->GenUniformGrid3D(
-	//	noiseOutput3D,
-	//	m_chunkPos.x * CHUNK_VOXEL_SIZE,
-	//	m_chunkPos.y * CHUNK_VOXEL_SIZE,
-	//	m_chunkPos.z * CHUNK_VOXEL_SIZE,
-	//	CHUNK_VOXEL_SIZE,
-	//	CHUNK_VOXEL_SIZE,
-	//	CHUNK_VOXEL_SIZE,
-	//	FREQUENCY / UNIT_VOXEL_RESOLUTION * 10,
-	//	1337
-	//);
 
 	bool emptyVal = 1;
 	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
@@ -333,7 +282,7 @@ void Chunk::GenerateVolume()
 	{
 		for (int y = 0; y < INT_CHUNK_VOXEL_SIZE; y++)
 		{
-			float worldSpaceHeight = (y - 1) / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
+			float worldSpaceHeight = (y - 1) * m_scale / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
 			for (int x = 0; x < INT_CHUNK_VOXEL_SIZE; x++)
 			{
 				// this can be one level up. move y inwards
@@ -360,7 +309,7 @@ void Chunk::GenerateVolume()
 					{
 						m_voxels[x][y][z] = BlockType::Grass;
 
-						float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION;
+						float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION / m_scale;
 						if (depth >= 0.0f && depth < 1.0f)
 							m_voxels[x][y][z] = BlockType::Grass;
 						else if (depth < dirtHeight + 1)
@@ -611,9 +560,9 @@ void Chunk::GenerateMesh()
 	m_genTime += time.count();
 }
 
-bool Chunk::IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const
+bool Chunk::IsInFrustum(const Frustum& f) const
 {
-	return m_AABB.IsInFrustumTranslateOnly(f, worldPos);
+	return m_AABB.IsInFrustumWorldspace(f);
 }
 
 void Chunk::GenerateMeshInt()
@@ -702,7 +651,7 @@ void Chunk::GenerateMeshInt()
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.push_back(Vertex{ (s_faces[i][j] + offset) * float(1.0f / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]});
+							m_vertices.push_back(VertexPCN{ (s_faces[i][j] + offset) * float(m_scale / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]});
 						}
 						for (uint j = 0; j < 6; j++)
 						{
@@ -863,7 +812,7 @@ void Chunk::GenerateGreedyMeshInt()
 						// add faces
 						for (uint m = 0; m < 4; m++)
 						{
-							m_vertices.push_back(Vertex{ vertices[m], sweepDir, normal });
+							m_vertices.push_back(VertexPCN{ vertices[m], sweepDir, normal });
 						}
 						for (uint m = 0; m < 6; m++)
 						{

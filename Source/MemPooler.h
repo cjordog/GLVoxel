@@ -11,14 +11,14 @@ public:
 	{
 		m_reclaimedItems = std::queue<T*>();
 		// this is just.. awful
-		m_data = (T*)malloc(sizeof(T) * 4096);
+		m_data = (T*)malloc(sizeof(T) * 20000);
 	}
 
 	T* New()
 	{
 		if (maxIndex >= 4096)
 			assert(false);
-		if (m_hasReclaimedItems)
+		if (m_reclaimedItems.size())
 		{
 			T* mem = m_reclaimedItems.front();
 			m_reclaimedItems.pop();
@@ -34,6 +34,7 @@ public:
 	{
 		// we should probably call some sort of free on the item for things like vertex arrays on Chunks? will happen when it gets recycled but..
 		m_reclaimedItems.push(obj);
+		m_hasReclaimedItems = true;
 	}
 
 private:

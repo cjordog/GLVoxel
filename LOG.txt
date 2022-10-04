@@ -1,0 +1,8 @@
+Sept 2022
+- updating from one VAO per chunk to one VAO for all chunks gave insane perf improvements	
+	- 20m triangles at ~50 frames to ~140 frames
+	- change from glVertexAttribPointer to glVertexAttribFormat/Binding
+		- learnOpengl uses the former. realllllly outdated
+- change from waiting for neighbor chunks to generate mesh and instead generate one extra row on each side. allows us to get rid of a lot of threading issues. cleaned up code. no more waiting on locks. way fewer callbacks. null bounds checks on mesh gen gone.
+	- speedup from ~0.4 to 0.2s per chunk generated
+- initial octree implementation. hashmap too slow once theres hundreds of thousands of elements. and convenient way to handle LOD

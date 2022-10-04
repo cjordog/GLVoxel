@@ -28,7 +28,8 @@ public:
 	Chunk();
 	Chunk(
 		const glm::vec3& chunkPos,
-		const ChunkGenParams* chunkGenParams
+		uint lod
+		//const ChunkGenParams* chunkGenParams
 	);
 	~Chunk();
 
@@ -54,7 +55,12 @@ public:
 		Done
 	};
 
-	static void InitShared(std::unordered_map<std::thread::id, int>& threadIDs, std::function<void(Chunk*)> generateMeshCallback, std::function<void(Chunk*)> renderListCallback);
+	static void InitShared(
+		std::unordered_map<std::thread::id, int>& threadIDs, 
+		std::function<void(Chunk*)> generateMeshCallback, 
+		std::function<void(Chunk*)> renderListCallback,
+		const ChunkGenParams* chunkGenParams
+	);
 	static void DeleteShared();
 
 	//bool BlockIsOpaque(BlockType t);
@@ -64,6 +70,9 @@ public:
 	uint* GetIndexData() { return m_indices.data(); }
 	uint GetVertexCount() { return m_vertexCount; }
 	uint GetIndexCount() { return m_indexCount; }
+	const AABB& GetBoundingBox() const { return m_AABB; }
+	const uint GetLOD() const { return m_LOD; }
+	bool IsDeletable() const { return m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers; }
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
 	ChunkState GetChunkState() const;
@@ -82,10 +91,9 @@ public:
 	void GenerateVolume2();
 	void GenerateMesh();
 
-	bool IsInFrustum(const Frustum& f, const glm::vec3& worldPos) const;
+	bool IsInFrustum(const Frustum& f) const;
 
 	glm::vec3 m_chunkPos = glm::vec3(0, 0, 0);
-	uint m_LOD = 0;
 
 	std::mutex m_mutex;
 
@@ -108,7 +116,7 @@ private:
 	// maybe dont need to store the extra edges all the time?
 	BlockType m_voxels[INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE] = { BlockType(0) };
 	//TODO:: call reserve on these with some sane value
-	std::vector<Vertex> m_vertices = std::vector<Vertex>();
+	std::vector<VertexPCN> m_vertices = std::vector<VertexPCN>();
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	// testing with these being atomic. dunno if its better/worse/blegh
@@ -116,7 +124,9 @@ private:
 
 	AABB m_AABB;
 	glm::mat4 m_modelMat;
-	
+	uint m_LOD = 0;
+	float m_scale = 0;
+
 	uint m_vertexCount = 0;
 	uint m_indexCount = 0;
 
@@ -133,6 +143,4 @@ private:
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
-
-	const ChunkGenParams* m_chunkGenParams = nullptr;
 	};

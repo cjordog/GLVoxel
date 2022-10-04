@@ -12,6 +12,7 @@
 struct OctreeNode
 {
 	OctreeNode(Chunk* chunk, const glm::vec3& centerPos, uint lod);
+	OctreeNode(const glm::vec3& centerPos, uint lod);
 
 	Chunk* m_chunk = nullptr;
 	glm::vec3 m_centerPos = glm::vec3(0);
@@ -23,7 +24,8 @@ class Octree
 {
 public:
 	Octree();
-	void GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& chunksToGenerate);
+	void GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks);
+	void GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks);
 
 private:
 	std::shared_ptr<OctreeNode> m_root = nullptr;

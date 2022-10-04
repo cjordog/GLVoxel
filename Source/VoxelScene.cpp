@@ -23,7 +23,8 @@
 #endif
 
 
-ShaderProgram VoxelScene::s_shaderProgram;
+ShaderProgram VoxelScene::s_chunkShaderProgram;
+ShaderProgram VoxelScene::s_debugWireframeShaderProgram;
 VoxelScene::ImguiData VoxelScene::s_imguiData;
 
 #ifdef DEBUG
@@ -40,7 +41,38 @@ VoxelScene::VoxelScene()
 	Chunk::InitShared(
 		m_threadPool.GetThreadIDs(),
 		std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1),
-		std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1));
+		std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1),
+		&m_chunkGenParams);
+
+	glGenVertexArrays(1, &m_chunkVAO);
+	//during initialization
+	glBindVertexArray(m_chunkVAO);
+
+	//https://riptutorial.com/opengl/example/28662/version-4-3
+	constexpr int vertexBindingPoint = 0;// free to choose, must be less than the GL_MAX_VERTEX_ATTRIB_BINDINGS limit
+
+	glVertexAttribFormat(0, 3, GL_FLOAT, false, offsetof(VertexPCN, position));
+	// set the details of a single attribute
+	glVertexAttribBinding(0, vertexBindingPoint);
+	// which buffer binding point it is attached to
+	glEnableVertexAttribArray(0);
+
+	glVertexAttribFormat(1, 3, GL_FLOAT, false, offsetof(VertexPCN, color));
+	glVertexAttribBinding(1, vertexBindingPoint);
+	glEnableVertexAttribArray(1);
+
+	glVertexAttribFormat(2, 3, GL_FLOAT, false, offsetof(VertexPCN, normal));
+	glVertexAttribBinding(2, vertexBindingPoint);
+	glEnableVertexAttribArray(2);
+
+	glGenBuffers(1, &m_aabbVBO);
+	glGenBuffers(1, &m_aabbEBO);
+
+	glGenVertexArrays(1, &m_debugWireframeVAO);
+	glBindVertexArray(m_debugWireframeVAO);
+	glVertexAttribFormat(0, 3, GL_FLOAT, false, offsetof(VertexP, position));
+	glVertexAttribBinding(0, vertexBindingPoint);
+	glEnableVertexAttribArray(0);
 }
 
 VoxelScene::~VoxelScene()
@@ -55,7 +87,8 @@ VoxelScene::~VoxelScene()
 
 void VoxelScene::InitShared()
 {
-	s_shaderProgram = ShaderProgram("terrain.vs.glsl", "terrain.fs.glsl");
+	s_chunkShaderProgram = ShaderProgram("terrain.vs.glsl", "terrain.fs.glsl");
+	s_debugWireframeShaderProgram = ShaderProgram("DebugWireframe.vs.glsl", "DebugWireframe.fs.glsl");
 }
 
 Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
@@ -64,7 +97,7 @@ Chunk* VoxelScene::CreateChunk(const glm::i32vec3& chunkPos)
 		return nullptr;
 
 	// TODO:: use smart pointers
-	Chunk* chunk = new Chunk(chunkPos, &m_chunkGenParams);
+	Chunk* chunk = new Chunk(chunkPos, 0/*, &m_chunkGenParams*/);
 	m_chunks[chunkPos] = chunk;
 	
 	return chunk;
@@ -88,8 +121,16 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 		m_chunkGenParams = m_chunkGenParamsNext;
 		ResetVoxelScene();
 	}
-	GenerateChunks(position);
+	//GenerateChunks(position);
 	//GenerateMeshes();
+	m_frameChunks.clear();
+	std::vector<Chunk*> newChunks;
+	m_octree.GenerateFromPosition2(position, newChunks, m_frameChunks);
+	for (Chunk* chunk : newChunks)
+	{
+		//if (chunk->GetLOD() == 0)
+			m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk), Priority_Med);
+	}
 
 #ifdef DEBUG
 	if (debugParams.m_validateThisFrame)
@@ -107,6 +148,7 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 				break;
 		}
 	}
+	GatherBoundingBoxes();
 }
 
 void VoxelScene::GenerateChunks(const glm::vec3& position)
@@ -273,40 +315,44 @@ void VoxelScene::ResetVoxelScene()
 void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 {
 	ZoneNamed(SetupRender, true);
-	s_shaderProgram.Use();
-	glm::mat4 Projection = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
-	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(Projection));
+	s_chunkShaderProgram.Use();
+	m_projMat = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
+	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
 
 	RenderSettings::DrawMode drawMode = RenderSettings::Get().m_drawMode;
 
-	m_renderCallbackListMutex.lock();
-	if (m_renderCallbackList.size())
-		m_renderList.insert(m_renderList.end(), m_renderCallbackList.begin(), m_renderCallbackList.end());
-	m_renderCallbackList.clear();
-	m_renderCallbackListMutex.unlock();
+	if (!m_useOctree)
+	{
+		m_renderCallbackListMutex.lock();
+		if (m_renderCallbackList.size())
+			m_renderList.insert(m_renderList.end(), m_renderCallbackList.begin(), m_renderCallbackList.end());
+		m_renderCallbackList.clear();
+		m_renderCallbackListMutex.unlock();
 
-	// throw this on a thread? 
-	glm::vec3 chunkPos = m_lastGeneratedChunkPos;
-	m_renderList.sort([chunkPos](const Chunk* a, const Chunk* b) 
-		{ return glm::length2(chunkPos - a->m_chunkPos) < glm::length2(chunkPos - b->m_chunkPos); }
-	);
+		// throw this on a thread? should only sort culled chunks or just not sort at all.
+		glm::vec3 chunkPos = m_lastGeneratedChunkPos;
+		m_renderList.sort([chunkPos](const Chunk* a, const Chunk* b)
+			{ return glm::length2(chunkPos - a->m_chunkPos) < glm::length2(chunkPos - b->m_chunkPos); }
+		);
+	}
+
 	
 	uint vertexCount = 0;
 	uint numRenderChunks = 0;
 	double totalGenTime = 0;
 
+
 	glm::mat4 modelMat;
 	ZoneNamed(Render, true);
-	for (Chunk* chunk : m_renderList)
+	glBindVertexArray(m_chunkVAO);
+	glDepthMask(GL_TRUE);
+	
+	for (Chunk* chunk : m_frameChunks)
 	{
-		if (chunk == nullptr)
+		if (chunk == nullptr || !chunk->Renderable())
 			continue;
 
-		//might need to check this again if we ever want to remove an element
-		//if (!chunk->Renderable())
-		//	continue;
-
-		if (chunk->IsInFrustum(debugCullCamera->GetFrustum(), chunk->m_chunkPos * float(CHUNK_UNIT_SIZE)))
+		if (chunk->IsInFrustum(debugCullCamera->GetFrustum()))
 		{
 			chunk->GetModelMat(modelMat);
 			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
@@ -316,11 +362,71 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 			chunk->Render(drawMode);
 		}
 	}
-	s_imguiData.numTotalChunks = m_chunks.size();
+	s_imguiData.numTotalChunks = m_frameChunks.size();
 	s_imguiData.numRenderChunks = numRenderChunks;
 	s_imguiData.numVerts = vertexCount;
 	s_imguiData.avgChunkGenTime = totalGenTime / s_imguiData.numRenderChunks;
+
+	if (RenderSettings::Get().renderDebugWireframes)
+	{
+		RenderDebugBoundingBoxes(camera, debugCullCamera);
+	}
 }
+
+void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)
+{
+	glm::vec3 center = aabb.center;
+	for (uint i = 0; i < BlockFace::NumFaces; i++)
+	{
+		for (uint j = 0; j < 4; j++)
+		{
+			// extents are half extents...
+			m_aabbVerts.push_back(VertexP{(s_centeredFaces[i][j] * aabb.extents + center)});
+		}
+		for (uint j = 0; j < 6; j++)
+		{
+			m_aabbIndices.push_back(s_indices[j] + m_aabbVertexCount);
+		}
+		m_aabbIndexCount += 6;
+		m_aabbVertexCount += 4;
+	}
+}
+
+void VoxelScene::GatherBoundingBoxes()
+{
+	ZoneScoped;
+	m_aabbIndexCount = 0;
+	m_aabbVertexCount = 0;
+	m_aabbVerts.clear();
+	m_aabbIndices.clear();
+	//for (const auto& chunk : m_renderList)
+	for (const auto& chunk : m_frameChunks)
+	{
+		FillBoundingBoxBuffer(chunk->GetBoundingBox());
+	}
+}
+
+
+// TODO:: turn this into an indexed draw on single cube mesh
+void VoxelScene::RenderDebugBoundingBoxes(const Camera* camera, const Camera* debugCullCamera)
+{
+	s_debugWireframeShaderProgram.Use();
+	glDepthMask(GL_FALSE);
+	glBindVertexArray(m_debugWireframeVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_aabbVBO);
+	glBufferData(GL_ARRAY_BUFFER, m_aabbVertexCount * sizeof(VertexP), (float*)m_aabbVerts.data(), GL_DYNAMIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_aabbIndexCount * sizeof(uint), m_aabbIndices.data(), GL_DYNAMIC_DRAW);
+
+	glBindVertexBuffer(0, m_aabbVBO, 0, sizeof(VertexP));
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
+
+	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * glm::mat4(1)));
+	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
+	glDrawElements(GL_LINES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
+	glDepthMask(GL_TRUE);
+}
+
 #ifdef IMGUI_ENABLED
 void VoxelScene::RenderImGui()
 {
