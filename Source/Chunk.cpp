@@ -651,11 +651,11 @@ void Chunk::GenerateMeshInt()
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.push_back(VertexPCN{ (s_faces[i][j] + offset) * float(m_scale / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]});
+							m_vertices.emplace_back((s_faces[i][j] + offset) * float(m_scale / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]);
 						}
 						for (uint j = 0; j < 6; j++)
 						{
-							m_indices.push_back(s_indices[j] + m_vertexCount);
+							m_indices.emplace_back(s_indices[j] + m_vertexCount);
 						}
 						m_indexCount += 6;
 						m_vertexCount += 4;
