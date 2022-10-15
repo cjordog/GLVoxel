@@ -27,7 +27,8 @@ ShaderProgram World::shaderProgram1;
 World::World()
 	: m_camera(glm::vec3(0, 80, -10), 0, 90.0f),
 	m_frozenCamera(glm::vec3(0, 80, -10), 0, 90.0f),
-	m_voxelScene()
+	m_voxelScene(),
+	m_player(glm::vec3(0, 100, 0))
 {
 	m_flags |= WorldFlags::EnableMT;
 }
@@ -61,32 +62,7 @@ void World::Render()
 	ImGuiBeginRender();
 #endif
 
-	//shaderProgram1.Use();
-
-	//glBindVertexArray(VAO);
-	//glBindBuffer(GL_ARRAY_BUFFER, VBO);
-	//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, EBO);
-
-	//glActiveTexture(GL_TEXTURE0);
-	//glBindTexture(GL_TEXTURE_2D, testTex1);
-	//glActiveTexture(GL_TEXTURE1);
-	//glBindTexture(GL_TEXTURE_2D, testTex2);
-
-	//glUniform1i(512, 0);
-	//glUniform1i(513, 1);
-
-	//glm::mat4 Projection = glm::perspective(glm::radians(45.0f), 4.0f / 3.0f, 0.1f, 100.f);
-	////glm::mat4 View = glm::translate(glm::mat4(1.0f), glm::vec3(0.0f, 0.0f, -10.0f));
-	////glm::mat4 Model = glm::rotate(glm::mat4(1.0f), 30.0f, glm::vec3(0.0f, 1.0f, 0.0f));
-	//glm::mat4 Model = glm::mat4(1.0f);
-
-	//glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(m_camera.GetViewMatrix() * Model));
-	//glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(Projection));
-
-	//glBindVertexArray(VAO);
-	//glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
-
-	m_voxelScene.Render(&m_camera, &m_frozenCamera);
+	m_voxelScene.Render(&m_player.GetCamera(), &m_frozenCamera);
 
 #ifdef IMGUI_ENABLED
 	ImGuiRenderStart();
@@ -100,10 +76,9 @@ void World::Update(float updateTime, InputData* inputData)
 	ZoneScoped;
 	m_speed += inputData->m_mouseWheel.y * 2.0f;
 	UpdateCamera(updateTime, inputData);
-	m_voxelScene.Update(m_camera.GetPosition(), m_debugParams);
-
-	if (m_debugParams.m_validateThisFrame)
-		m_debugParams.m_validateThisFrame = false;
+	UpdatePlayer(updateTime, inputData);
+	UpdatePhysics();
+	m_voxelScene.Update(m_camera.GetPosition());
 
 	CalcFrameRate(updateTime);
 }
@@ -183,6 +158,16 @@ void World::UpdateCamera(float updateTime, InputData* inputData)
 	}
 }
 
+void World::UpdatePlayer(float updateTime, InputData* inputData)
+{
+
+}
+
+void World::UpdatePhysics()
+{
+	m_voxelScene.ResolveBoxCollider(m_player.GetBoxCollider());
+}
+
 #ifdef IMGUI_ENABLED
 void World::ImGuiBeginRender()
 {
@@ -200,7 +185,6 @@ void World::ImGuiRenderStart()
 	glm::vec3 cameraPos = m_camera.GetPosition();
 	ImGui::Text("Position x:%.2f y:%.2f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
-	ImGui::Checkbox("Validate", &m_debugParams.m_validateThisFrame);
 }
 
 void World::ImGuiRenderEnd()

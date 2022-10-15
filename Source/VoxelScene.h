@@ -13,6 +13,8 @@
 #include "Octree.h"
 #include "ShaderProgram.h"
 #include "ThreadPool.h"
+#include "Collider.h"
+#include "BoxCollider.h"
 
 class Chunk;
 class Camera;
@@ -33,12 +35,13 @@ public:
 	static void InitShared();
 
 	Chunk* CreateChunk(const glm::i32vec3& chunkPos);
-	void Update(const glm::vec3& position, const DebugParams& debugParams);
+	void Update(const glm::vec3& position);
 	void GenerateChunks(const glm::vec3& position);
 	void TestUpdate(const glm::vec3& position);
 	void GenerateMeshes();
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
+	void ResolveBoxCollider(BoxCollider& collider);
 #ifdef IMGUI_ENABLED
 	void RenderImGui();
 #endif
@@ -105,4 +108,9 @@ private:
 	bool m_useOctree = true;
 	std::vector<Chunk*> m_frameChunks;
 	glm::mat4 m_projMat;
+
+	FastNoise::SmartNode<FastNoise::FractalFBm> m_noiseGenerator;
+	FastNoise::SmartNode<FastNoise::FractalRidged> m_noiseGeneratorCave;
+
+	std::mutex testMutex;
 };

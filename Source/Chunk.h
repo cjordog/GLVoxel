@@ -17,10 +17,20 @@ public:
 	struct ChunkGenParams
 	{
 		float caveFrequency = 1;
+		float terrainHeight = 100.0f;
+		float terrainLacunarity = 1.0f;
+		float terrainGain = 1.0f;
+		float terrainFrequency = 1.0f;
+		int terrainOctaves = 4;
 
 		bool operator!=(const ChunkGenParams& rhs)
 		{
-			return caveFrequency != rhs.caveFrequency;
+			return caveFrequency != rhs.caveFrequency || 
+				terrainHeight != rhs.terrainHeight ||
+				terrainLacunarity != rhs.terrainLacunarity ||
+				terrainGain != rhs.terrainGain ||
+				terrainFrequency != rhs.terrainFrequency ||
+				terrainOctaves != rhs.terrainOctaves;
 		}
 	};
 
@@ -59,7 +69,9 @@ public:
 		std::unordered_map<std::thread::id, int>& threadIDs, 
 		std::function<void(Chunk*)> generateMeshCallback, 
 		std::function<void(Chunk*)> renderListCallback,
-		const ChunkGenParams* chunkGenParams
+		const ChunkGenParams* chunkGenParams,
+		FastNoise::SmartNode<FastNoise::FractalFBm>* terrainNoise,
+		FastNoise::SmartNode<FastNoise::FractalRidged>* caveNoise
 	);
 	static void DeleteShared();
 
@@ -87,9 +99,12 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
-	void GenerateVolume();
+	static FastNoise::SmartNode<FastNoise::FractalFBm>* s_noiseGenerator;
+	static FastNoise::SmartNode<FastNoise::FractalRidged>* s_noiseGeneratorCave;
+	void GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave);
 	void GenerateVolume2();
 	void GenerateMesh();
+	static void SetTerrainParams(float lacunarity, float gain, int octaves);
 
 	bool IsInFrustum(const Frustum& f) const;
 
@@ -143,4 +158,4 @@ private:
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
-	};
+};

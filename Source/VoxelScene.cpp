@@ -36,13 +36,28 @@ const uint RENDER_DISTANCE = 15;
 VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
-	m_chunks.reserve(10000);
+
+	m_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
+	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
+	m_noiseGenerator->SetSource(fnSimplex);
+	m_noiseGenerator->SetGain(0.1f);
+	m_noiseGenerator->SetLacunarity(10);
+	m_noiseGenerator->SetOctaveCount(3);
+
+	m_noiseGeneratorCave = FastNoise::New<FastNoise::FractalRidged>();
+	auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
+	m_noiseGeneratorCave->SetSource(fnSimplex2);
+	m_noiseGeneratorCave->SetOctaveCount(2);
+
 	// if we can ever have more than one voxel scene move this.
 	Chunk::InitShared(
 		m_threadPool.GetThreadIDs(),
 		std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1),
 		std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1),
-		&m_chunkGenParams);
+		&m_chunkGenParams,
+		&m_noiseGenerator,
+		&m_noiseGeneratorCave
+	);
 
 	glGenVertexArrays(1, &m_chunkVAO);
 	//during initialization
@@ -113,29 +128,29 @@ inline void VoxelScene::NotifyNeighbor(Chunk* chunk, glm::i32vec3 pos, BlockFace
 	}
 }
 
-void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParams)
+void VoxelScene::Update(const glm::vec3& position)
 {
 	ZoneScoped;
 	if (m_chunkGenParams != m_chunkGenParamsNext)
 	{
 		m_chunkGenParams = m_chunkGenParamsNext;
 		ResetVoxelScene();
+		m_noiseGenerator->SetLacunarity(m_chunkGenParamsNext.terrainLacunarity);
+		m_noiseGenerator->SetGain(m_chunkGenParamsNext.terrainGain);
+		m_noiseGenerator->SetOctaveCount(m_chunkGenParamsNext.terrainOctaves);
 	}
-	//GenerateChunks(position);
-	//GenerateMeshes();
 	m_frameChunks.clear();
 	std::vector<Chunk*> newChunks;
 	m_octree.GenerateFromPosition2(position, newChunks, m_frameChunks);
 	for (Chunk* chunk : newChunks)
 	{
-		//if (chunk->GetLOD() == 0)
-			m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk), Priority_Med);
+		m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk, &m_noiseGenerator, &m_noiseGeneratorCave), Priority_Med);
 	}
 
-#ifdef DEBUG
-	if (debugParams.m_validateThisFrame)
-		ValidateChunks();
-#endif
+//#ifdef DEBUG
+//	if (debugParams.m_validateThisFrame)
+//		ValidateChunks();
+//#endif
 
 	if (!RenderSettings::Get().mtEnabled)
 	{
@@ -148,150 +163,91 @@ void VoxelScene::Update(const glm::vec3& position, const DebugParams& debugParam
 				break;
 		}
 	}
-	GatherBoundingBoxes();
-}
 
-void VoxelScene::GenerateChunks(const glm::vec3& position)
-{
-	ZoneScoped;
-	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
-
-	if (m_threadPool.GetSize() < 10)
+	if (RenderSettings::Get().renderDebugWireframes)
 	{
-		if (m_currentGenerateRadius < RENDER_DISTANCE)
-		{
-			m_currentGenerateRadius++;
-		}
-		else
-		{
-			if (centerChunkPos == m_lastGeneratedChunkPos)
-				return;
-		}
-	}
-	else
-	{
-		return;
-	}
-	glm::i32vec3 chunkPos = centerChunkPos - glm::i32vec3(m_currentGenerateRadius);
-	int i = m_currentGenerateRadius;
-	for (int j = -i; j <= i; j++)
-	{
-		chunkPos.x++;
-		chunkPos.y = centerChunkPos.y - m_currentGenerateRadius;
-		for (int k = -i; k <= i; k++)
-		{
-			chunkPos.y++;
-			chunkPos.z = centerChunkPos.z - m_currentGenerateRadius;
-			for (int l = -i; l <= i; l++)
-			{
-				chunkPos.z++;
-				if (!m_chunks[chunkPos])
-				{
-					Chunk* newChunk = CreateChunk(chunkPos);
-
-					// notify neighbors
-					for (uint m = 0; m < BlockFace::NumFaces; m++)
-					{
-						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-					}
-					//batch submit these?
-					m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
-				}
-			}
-		}
-	}
-	m_lastGeneratedChunkPos = centerChunkPos;
-}
-
-void VoxelScene::TestUpdate(const glm::vec3& position)
-{
-	std::unordered_set<Chunk*> generateMeshList;
-	std::vector<glm::vec3> poss = {
-		glm::vec3(0, -1, 0),
-		glm::vec3(1, -1, 0),
-		glm::vec3(-1, -1, 0),
-		glm::vec3(0, 0, 0),
-		glm::vec3(0, -2, 0),
-		glm::vec3(0, -1, 1),
-		glm::vec3(0, -1, -1),
-	};
-	m_chunks.clear();
-	for (auto pos : poss)
-	{
-		glm::i32vec3 chunkPos = glm::i32vec3(pos);
-		Chunk* newChunk = CreateChunk(chunkPos);
-
-		if (newChunk)
-		{
-			generateMeshList.emplace(newChunk);
-
-			// notify neighbors
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Front])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Back, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Front, neighbor);
-			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Back])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Front, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Back, neighbor);
-			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Right])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Left, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Right, neighbor);
-			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Left])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Right, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Left, neighbor);
-			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Top])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Bottom, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Top, neighbor);
-			}
-			if (Chunk* neighbor = m_chunks[chunkPos + glm::i32vec3(s_blockNormals[BlockFace::Bottom])])
-			{
-				if (neighbor->UpdateNeighborRef(BlockFace::Top, newChunk))
-					generateMeshList.emplace(neighbor);
-				newChunk->UpdateNeighborRef(BlockFace::Bottom, neighbor);
-			}
-		}
+		GatherBoundingBoxes();
 	}
 }
-
-void VoxelScene::GenerateMeshes()
-{
-	ZoneScoped;
-	m_generateMeshCallbackListMutex.lock();
-	if (m_generateMeshCallbackList.size())
-		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
-	m_generateMeshCallbackList.clear();
-	m_generateMeshCallbackListMutex.unlock();
-
-	const uint frameMaxMeshes = m_generateMeshList.size();
-	const uint iterations = std::min(uint(m_generateMeshList.size()), frameMaxMeshes);
-	for (uint i = 0; i < iterations; i++)
-	{
-		Chunk* chunk = m_generateMeshList.front();
-		m_generateMeshList.pop_front();
-
-		if (chunk->ReadyForMeshGeneration())
-		{
-			m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
-			continue;
-		}
-
-		//otherwise re-add to queue to try again later
-		m_generateMeshList.push_back(chunk);
-	}
-}
+//
+//void VoxelScene::GenerateChunks(const glm::vec3& position)
+//{
+//	ZoneScoped;
+//	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
+//
+//	if (m_threadPool.GetSize() < 10)
+//	{
+//		if (m_currentGenerateRadius < RENDER_DISTANCE)
+//		{
+//			m_currentGenerateRadius++;
+//		}
+//		else
+//		{
+//			if (centerChunkPos == m_lastGeneratedChunkPos)
+//				return;
+//		}
+//	}
+//	else
+//	{
+//		return;
+//	}
+//	glm::i32vec3 chunkPos = centerChunkPos - glm::i32vec3(m_currentGenerateRadius);
+//	int i = m_currentGenerateRadius;
+//	for (int j = -i; j <= i; j++)
+//	{
+//		chunkPos.x++;
+//		chunkPos.y = centerChunkPos.y - m_currentGenerateRadius;
+//		for (int k = -i; k <= i; k++)
+//		{
+//			chunkPos.y++;
+//			chunkPos.z = centerChunkPos.z - m_currentGenerateRadius;
+//			for (int l = -i; l <= i; l++)
+//			{
+//				chunkPos.z++;
+//				if (!m_chunks[chunkPos])
+//				{
+//					Chunk* newChunk = CreateChunk(chunkPos);
+//
+//					// notify neighbors
+//					for (uint m = 0; m < BlockFace::NumFaces; m++)
+//					{
+//						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
+//					}
+//					//batch submit these?
+//					//m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
+//				}
+//			}
+//		}
+//	}
+//	m_lastGeneratedChunkPos = centerChunkPos;
+//}
+//
+//void VoxelScene::GenerateMeshes()
+//{
+//	ZoneScoped;
+//	m_generateMeshCallbackListMutex.lock();
+//	if (m_generateMeshCallbackList.size())
+//		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
+//	m_generateMeshCallbackList.clear();
+//	m_generateMeshCallbackListMutex.unlock();
+//
+//	const uint frameMaxMeshes = m_generateMeshList.size();
+//	const uint iterations = std::min(uint(m_generateMeshList.size()), frameMaxMeshes);
+//	for (uint i = 0; i < iterations; i++)
+//	{
+//		Chunk* chunk = m_generateMeshList.front();
+//		m_generateMeshList.pop_front();
+//
+//		if (chunk->ReadyForMeshGeneration())
+//		{
+//			m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
+//			continue;
+//		}
+//
+//		//otherwise re-add to queue to try again later
+//		m_generateMeshList.push_back(chunk);
+//	}
+//}
 
 void VoxelScene::ResetVoxelScene()
 {
@@ -310,6 +266,8 @@ void VoxelScene::ResetVoxelScene()
 	m_lastGenerateRadius = 0;
 	m_lastGeneratePos = glm::vec3(0, 0, 0);
 	m_lastGeneratedChunkPos = glm::i32vec3(UINT_MAX, UINT_MAX, UINT_MAX);
+
+	m_octree.Clear();
 }
 
 void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
@@ -341,9 +299,9 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	uint numRenderChunks = 0;
 	double totalGenTime = 0;
 
+	ZoneNamed(Render, true);
 
 	glm::mat4 modelMat;
-	ZoneNamed(Render, true);
 	glBindVertexArray(m_chunkVAO);
 	glDepthMask(GL_TRUE);
 	
@@ -371,6 +329,11 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	{
 		RenderDebugBoundingBoxes(camera, debugCullCamera);
 	}
+}
+
+void VoxelScene::ResolveBoxCollider(BoxCollider& collider)
+{
+
 }
 
 void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)
@@ -436,6 +399,16 @@ void VoxelScene::RenderImGui()
 	ImGui::Text("%f avg gen time", s_imguiData.avgChunkGenTime);
 
 	ImGui::SliderFloat("cave frequency", &m_chunkGenParamsNext.caveFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+	//float terrainHeight = 100.0f;
+	//float terrainLacunarity = 1.0f;
+	//float terrainGain = 1.0f;
+	//float terrainFrequency = 1.0f;
+	//int terrainOctaves = 4;
+	ImGui::SliderFloat("Terrain Height", &m_chunkGenParamsNext.terrainHeight, 1.f, 2000.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+	ImGui::SliderFloat("Terrain Lacunarity", &m_chunkGenParamsNext.terrainLacunarity, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+	ImGui::SliderFloat("Terrain Gain", &m_chunkGenParamsNext.terrainGain, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+	ImGui::SliderFloat("Terrain Frequency", &m_chunkGenParamsNext.terrainFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
+	ImGui::InputInt("Terrain Octaves", &m_chunkGenParamsNext.terrainOctaves, 1, 10);
 }
 #endif
 

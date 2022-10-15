@@ -13,11 +13,12 @@ typedef unsigned int uint;
 #define PI 3.14159f
 
 // how many voxels per chunk
-constexpr int CHUNK_VOXEL_SIZE = 16;
+constexpr int CHUNK_VOXEL_SIZE = 32;
 // how many voxels per unit of space    TODO::this is broken
 constexpr int UNIT_VOXEL_RESOLUTION = 2;
 // how many units does a chunk take up
 constexpr int CHUNK_UNIT_SIZE = CHUNK_VOXEL_SIZE / UNIT_VOXEL_RESOLUTION;
+constexpr float VOXEL_UNIT_SIZE = 1.0f / UNIT_VOXEL_RESOLUTION;
 
 static_assert(CHUNK_VOXEL_SIZE % UNIT_VOXEL_RESOLUTION == 0);
 
@@ -224,6 +225,10 @@ struct AABB : public BoundingVolume
 
 	AABB(const glm::vec3& inCenter, float iI, float iJ, float iK)
 		: BoundingVolume{}, center{ inCenter }, extents{ iI, iJ, iK }
+	{};
+
+	AABB(const glm::vec3& inCenter, const glm::vec3& extent)
+		: BoundingVolume{}, center(inCenter), extents(extent)
 	{};
 
 	bool IsInFrustum(const Frustum& camFrustum, const glm::mat4& transform) const override

@@ -26,6 +26,7 @@ public:
 	Octree();
 	void GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks);
 	void GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks);
+	void Clear();
 
 private:
 	std::shared_ptr<OctreeNode> m_root = nullptr;
@@ -38,4 +39,5 @@ private:
 
 	void CreateChildren(std::shared_ptr<OctreeNode> parent);
 	bool ReleaseChildren(std::shared_ptr<OctreeNode> node);
+	bool ReleaseChildrenBlocking(std::shared_ptr<OctreeNode> node);
 };

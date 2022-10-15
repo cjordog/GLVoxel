@@ -80,6 +80,11 @@ public:
 		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
 	}
 
+	//void Submit(std::function<void()> t, JobPriority prio)
+	//{
+	//	m_workQueue.push({ jobCount++, t, prio });
+	//}
+
 	bool GetPoolJob(Job& j)
 	{
 		if (m_workQueue.try_pop(j))

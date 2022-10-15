@@ -12,10 +12,6 @@ float smoothstep(float edge0, float edge1, float x) {
 	return x * x * (3 - 2 * x);
 }
 
-
-static FastNoise::SmartNode<FastNoise::FractalFBm> s_noiseGenerator;
-static FastNoise::SmartNode<FastNoise::FractalRidged> s_noiseGeneratorCave;
-
 static std::unordered_map<std::thread::id, int> s_threadIDs;
 static float* s_sharedScratchpadMemory;
 
@@ -86,18 +82,13 @@ void Chunk::InitShared(
 	std::unordered_map<std::thread::id, int>& threadIDs,
 	std::function<void(Chunk*)> generateMeshCallback,
 	std::function<void(Chunk*)> renderListCallback,
-	const ChunkGenParams* chunkGenParams
+	const ChunkGenParams* chunkGenParams,
+	FastNoise::SmartNode<FastNoise::FractalFBm>* terrainNoise,
+	FastNoise::SmartNode<FastNoise::FractalRidged>* caveNoise
 )
 {
-	s_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
-	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
-	s_noiseGenerator->SetSource(fnSimplex);
-	s_noiseGenerator->SetOctaveCount(4);
-
-	s_noiseGeneratorCave = FastNoise::New<FastNoise::FractalRidged>();
-	auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
-	s_noiseGeneratorCave->SetSource(fnSimplex2);
-	s_noiseGeneratorCave->SetOctaveCount(1);
+	//s_noiseGenerator = terrainNoise;
+	//s_noiseGeneratorCave = caveNoise;
 
 	s_threadIDs = threadIDs;
 
@@ -231,11 +222,11 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 	}
 }
 
-void Chunk::GenerateVolume()
+void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave)
 {
 	auto startTime = std::chrono::high_resolution_clock::now();
 
-	constexpr float TERRAIN_HEIGHT = 80.0f;
+	const float TERRAIN_HEIGHT = s_chunkGenParams->terrainHeight;
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
 
@@ -246,16 +237,17 @@ void Chunk::GenerateVolume()
 	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 	float* noiseOutput3 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
-	s_noiseGenerator->GenUniformGrid2D(
+	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput,
 		(m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
 		(m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
 		turbulentRowSize,
 		turbulentRowSize,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale,
+		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
 		1
 	);
-	s_noiseGenerator->GenUniformGrid2D(
+	// this is kinda overkill for just the dirt
+	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput2,
 		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
 		(m_chunkPos.z * CHUNK_VOXEL_SIZE - 1) / m_scale,
@@ -264,7 +256,7 @@ void Chunk::GenerateVolume()
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
 		1337
 	);
-	s_noiseGeneratorCave->GenUniformGrid3D(
+	noiseGeneratorCave->get()->GenUniformGrid3D(
 		noiseOutput3,
 		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
 		(m_chunkPos.y * CHUNK_VOXEL_SIZE - 1) / m_scale,
@@ -558,6 +550,17 @@ void Chunk::GenerateMesh()
 	auto endTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> time = endTime - startTime;
 	m_genTime += time.count();
+}
+
+void Chunk::SetTerrainParams(float lacunarity, float gain, int octaves)
+{
+	//s_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
+	//auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
+	//s_noiseGenerator->SetSource(fnSimplex);
+	//s_noiseGenerator->SetLacunarity(lacunarity);
+	//s_noiseGenerator->SetGain(gain);
+	//s_noiseGenerator->SetOctaveCount(octaves);
+	////s_noiseGenerator->SetWeightedStrength()
 }
 
 bool Chunk::IsInFrustum(const Frustum& f) const
