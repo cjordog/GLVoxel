@@ -6,7 +6,7 @@ BoxCollider::BoxCollider()
 }
 
 BoxCollider::BoxCollider(const glm::vec3& centerPosition, const glm::vec3& size)
-	: m_AABB(centerPosition, size)
+	: m_AABB(centerPosition, size, true)
 {
 	m_velocity = glm::vec3(0);
 }

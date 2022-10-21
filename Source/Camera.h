@@ -11,7 +11,7 @@ class Camera
 public:
 	Camera(glm::vec3 pos, float pitch, float yaw);
 
-	void Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta);
+	void Transform(glm::vec3 newPos, float pitchDelta, float yawDelta);
 	void CalculateFrustum();
 
 	const glm::mat4& GetViewMatrix() const { return m_viewMatrix; }

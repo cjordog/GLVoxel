@@ -28,6 +28,8 @@ public:
 	void GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks);
 	void Clear();
 
+	Chunk* GetChunkAtWorldPos(const glm::vec3& worldPos);
+
 private:
 	std::shared_ptr<OctreeNode> m_root = nullptr;
 	int m_size = 0;		// size in chunks
@@ -35,7 +37,7 @@ private:
 	glm::vec3 m_centerPos = glm::vec3(0);
 	MemPooler<Chunk> m_memPool;
 
-	//static inline int GetChildIndex(const glm::vec3& octreePos);
+	static inline int GetChildIndex(const glm::vec3& positionInNode);
 
 	void CreateChildren(std::shared_ptr<OctreeNode> parent);
 	bool ReleaseChildren(std::shared_ptr<OctreeNode> node);

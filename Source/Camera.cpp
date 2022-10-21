@@ -15,7 +15,7 @@ Camera::Camera(glm::vec3 pos, float pitch, float yaw)
 	m_viewMatrix = glm::lookAt(m_position, m_position + direction, glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
-void Camera::Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta)
+void Camera::Transform(glm::vec3 newPos, float pitchDelta, float yawDelta)
 {
 	//if (glm::length(posDelta) == 0 && pitchDelta == 0 && yawDelta == 0)
 	//	return;
@@ -35,9 +35,11 @@ void Camera::Transform(glm::vec3 posDelta, float pitchDelta, float yawDelta)
 	m_right = (normalize(cross(m_forward, worldUp)));
 	m_up = (cross(m_right, m_forward));
 
+	 //TODO:: this is wrong. need to m_viewMatrix doesnt get moved by posDelta this frame.
+	m_position = newPos;
 	m_viewMatrix = glm::lookAt(m_position, m_position + m_forward, worldUp);
 
-	m_position += posDelta * glm::mat3(m_viewMatrix);
+	//m_position += posDelta * glm::mat3(m_viewMatrix);
 
 	m_halfVSide = m_farClip * tanf(GetFovY() * 0.5f);
 	m_halfHSide = m_halfVSide * m_aspectRatio;

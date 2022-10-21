@@ -14,6 +14,8 @@
 class Chunk
 {
 public:
+	static const int INT_CHUNK_VOXEL_SIZE = CHUNK_VOXEL_SIZE + 2;
+
 	struct ChunkGenParams
 	{
 		float caveFrequency = 1;
@@ -85,9 +87,12 @@ public:
 	const AABB& GetBoundingBox() const { return m_AABB; }
 	const uint GetLOD() const { return m_LOD; }
 	bool IsDeletable() const { return m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers; }
+	glm::vec3 GetChunkPos() { return m_chunkPos; }
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
+	bool VoxelIsCollideable(const glm::i32vec3& index) const;
 	ChunkState GetChunkState() const;
+	bool GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex);
 	bool ReadyForMeshGeneration() const;
 
 	bool IsEmpty() const { return bool(m_empty); }
@@ -99,8 +104,6 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
-	static FastNoise::SmartNode<FastNoise::FractalFBm>* s_noiseGenerator;
-	static FastNoise::SmartNode<FastNoise::FractalRidged>* s_noiseGeneratorCave;
 	void GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave);
 	void GenerateVolume2();
 	void GenerateMesh();
@@ -115,9 +118,6 @@ public:
 	double m_genTime = 0.0f;
 
 private:
-
-	static const int INT_CHUNK_VOXEL_SIZE = CHUNK_VOXEL_SIZE + 2;
-
 	void GenerateMeshInt();
 	void GenerateGreedyMeshInt();
 

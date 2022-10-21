@@ -39,3 +39,4 @@ X if we generate neighboring voxels one block out on each side for our current c
 - figure out how to fix seems between LODs. need to generate out more voxels than needed on higher LOD's?
 - LOD dithering? or pop buffers? probably just between first couple LODs
 - put octree stuff on a thread? doesnt even need to run every frame. just when we move. dont need results immediately even.
+- octree frustum culling

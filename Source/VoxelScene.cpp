@@ -147,11 +147,6 @@ void VoxelScene::Update(const glm::vec3& position)
 		m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk, &m_noiseGenerator, &m_noiseGeneratorCave), Priority_Med);
 	}
 
-//#ifdef DEBUG
-//	if (debugParams.m_validateThisFrame)
-//		ValidateChunks();
-//#endif
-
 	if (!RenderSettings::Get().mtEnabled)
 	{
 		Job j;
@@ -169,85 +164,6 @@ void VoxelScene::Update(const glm::vec3& position)
 		GatherBoundingBoxes();
 	}
 }
-//
-//void VoxelScene::GenerateChunks(const glm::vec3& position)
-//{
-//	ZoneScoped;
-//	glm::i32vec3 centerChunkPos = position / float(CHUNK_UNIT_SIZE);
-//
-//	if (m_threadPool.GetSize() < 10)
-//	{
-//		if (m_currentGenerateRadius < RENDER_DISTANCE)
-//		{
-//			m_currentGenerateRadius++;
-//		}
-//		else
-//		{
-//			if (centerChunkPos == m_lastGeneratedChunkPos)
-//				return;
-//		}
-//	}
-//	else
-//	{
-//		return;
-//	}
-//	glm::i32vec3 chunkPos = centerChunkPos - glm::i32vec3(m_currentGenerateRadius);
-//	int i = m_currentGenerateRadius;
-//	for (int j = -i; j <= i; j++)
-//	{
-//		chunkPos.x++;
-//		chunkPos.y = centerChunkPos.y - m_currentGenerateRadius;
-//		for (int k = -i; k <= i; k++)
-//		{
-//			chunkPos.y++;
-//			chunkPos.z = centerChunkPos.z - m_currentGenerateRadius;
-//			for (int l = -i; l <= i; l++)
-//			{
-//				chunkPos.z++;
-//				if (!m_chunks[chunkPos])
-//				{
-//					Chunk* newChunk = CreateChunk(chunkPos);
-//
-//					// notify neighbors
-//					for (uint m = 0; m < BlockFace::NumFaces; m++)
-//					{
-//						NotifyNeighbor(newChunk, chunkPos, BlockFace(m), s_opposingBlockFaces[m]);
-//					}
-//					//batch submit these?
-//					//m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, newChunk), Priority_Med);
-//				}
-//			}
-//		}
-//	}
-//	m_lastGeneratedChunkPos = centerChunkPos;
-//}
-//
-//void VoxelScene::GenerateMeshes()
-//{
-//	ZoneScoped;
-//	m_generateMeshCallbackListMutex.lock();
-//	if (m_generateMeshCallbackList.size())
-//		m_generateMeshList.insert(m_generateMeshList.end(), m_generateMeshCallbackList.begin(), m_generateMeshCallbackList.end());
-//	m_generateMeshCallbackList.clear();
-//	m_generateMeshCallbackListMutex.unlock();
-//
-//	const uint frameMaxMeshes = m_generateMeshList.size();
-//	const uint iterations = std::min(uint(m_generateMeshList.size()), frameMaxMeshes);
-//	for (uint i = 0; i < iterations; i++)
-//	{
-//		Chunk* chunk = m_generateMeshList.front();
-//		m_generateMeshList.pop_front();
-//
-//		if (chunk->ReadyForMeshGeneration())
-//		{
-//			m_threadPool.Submit(std::bind(&Chunk::GenerateMesh, chunk), Priority_Med);
-//			continue;
-//		}
-//
-//		//otherwise re-add to queue to try again later
-//		m_generateMeshList.push_back(chunk);
-//	}
-//}
 
 void VoxelScene::ResetVoxelScene()
 {
@@ -331,9 +247,110 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	}
 }
 
-void VoxelScene::ResolveBoxCollider(BoxCollider& collider)
+// since velocity * frameDelta buffers are so small, could we not just look if vector goes into new block. 
+// if it does, check that block. resolve vectors easily. small edge cases when crossing multiple borders. could then fallback to amanatides and woo 
+// but that would almost never happen with these vector sizes? maybe lower framerates it could
+void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 {
+	// just do this terribleness for now. i dont want to deal with physics rn
+	glm::vec3 worldPos = collider.GetMiddleCenter();
 
+	// need to solve edge case if outside the octree
+	Chunk* currChunk = m_octree.GetChunkAtWorldPos(worldPos);
+	if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
+		return;
+
+	glm::vec3 velocity = collider.GetVelocity();
+	velocity = velocity + glm::vec3(0, -10, 0) * (timeDelta / 1000.f);
+	collider.SetVelocity(velocity);
+	const float maxT = (timeDelta / 1000.f);
+
+	glm::i32vec3 voxelIndex;
+	bool ret = currChunk->GetVoxelIndexAtWorldPos(worldPos, voxelIndex);
+	const int stepX = velocity.x > 0 ? 1 : (velocity.x < 0 ? -1 : 0);
+	const int stepY = velocity.y > 0 ? 1 : (velocity.y < 0 ? -1 : 0);
+	const int stepZ = velocity.z > 0 ? 1 : (velocity.z < 0 ? -1 : 0);
+	const glm::i32vec3 step(stepX, stepY, stepZ);
+
+	glm::vec3 chunkPos = currChunk->GetChunkPos();
+
+	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.x), 0.000001f);
+	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.y), 0.000001f);
+	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.z), 0.000001f);
+
+	glm::vec3 voxelBorder = glm::vec3(voxelIndex + glm::max(step, 0)) * VOXEL_UNIT_SIZE;
+	glm::vec3 tMax = (voxelBorder - (worldPos - chunkPos));
+	tMax.x = velocity.x != 0.0f ? tMax.x / velocity.x : 1000000.f;
+	tMax.y = velocity.y != 0.0f ? tMax.y / velocity.y : 1000000.f;
+	tMax.z = velocity.z != 0.0f ? tMax.z / velocity.z : 1000000.f;
+
+	bool exitedChunk = false;
+	int exitIndex = 0;
+	float lastT = 0;
+	bool collided = false;
+	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < maxT)
+	{
+		if (tMax.x < tMax.y)
+		{
+			if (tMax.x < tMax.z)
+			{
+				voxelIndex.x += stepX;
+				exitedChunk = (voxelIndex.x > CHUNK_VOXEL_SIZE || voxelIndex.x < 0);
+				lastT = tMax.x;
+				exitIndex = 0;
+				tMax.x += tDeltaX;
+			}
+			else
+			{
+				voxelIndex.z += stepZ;
+				exitedChunk = (voxelIndex.z > CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
+				lastT = tMax.z;
+				exitIndex = 2;
+				tMax.z += tDeltaZ;
+
+			}
+		}
+		else 
+		{
+			if (tMax.y < tMax.z)
+			{
+				voxelIndex.y += stepY;
+				exitedChunk = (voxelIndex.y > CHUNK_VOXEL_SIZE || voxelIndex.y < 0);
+				lastT = tMax.y;
+				exitIndex = 1;
+				tMax.y += tDeltaY;
+			}
+			else 
+			{
+				voxelIndex.z += stepZ;
+				exitedChunk = (voxelIndex.z > CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
+				lastT = tMax.z;
+				exitIndex = 2;
+				tMax.z += tDeltaZ;
+			}
+		}
+		if (exitedChunk)
+		{
+			// bump a little in that direction to make sure were in that new chunk and not right on the edge
+			glm::vec3 currPos = worldPos + velocity * (lastT + 0.01f);
+			currChunk = m_octree.GetChunkAtWorldPos(currPos);
+			currChunk->GetVoxelIndexAtWorldPos(currPos, voxelIndex);
+			exitedChunk = false;
+		}
+	}
+
+
+	worldPos += velocity * std::min(maxT, lastT);
+	collider.SetMiddleCenter(worldPos);
+	if (lastT < maxT) 
+	{
+		velocity[exitIndex] = 0.0f;
+	}
+
+	if (exitIndex == 1)
+	{
+		 collider.isGrounded = true;
+	}
 }
 
 void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)

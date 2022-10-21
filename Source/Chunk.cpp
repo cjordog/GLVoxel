@@ -140,9 +140,32 @@ Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 	return m_voxels[x][y][z];
 }
 
+bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
+{
+	const glm::i32vec3 intIndex = index + glm::i32vec3(1);
+	switch (m_voxels[intIndex.x][intIndex.y][intIndex.z])
+	{
+	case Chunk::BlockType::Dirt:
+	case Chunk::BlockType::Grass:
+	case Chunk::BlockType::Stone:
+		return true;
+	default:
+		return false;
+	}
+}
+
 Chunk::ChunkState Chunk::GetChunkState() const
 {
 	return m_state;
+}
+
+bool Chunk::GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex)
+{
+	voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
+	//voxelIndex += glm::i32vec3(1);
+	return voxelIndex.x < CHUNK_VOXEL_SIZE&& voxelIndex.x >= 0
+		&& voxelIndex.y < CHUNK_VOXEL_SIZE&& voxelIndex.y >= 0
+		&& voxelIndex.z < CHUNK_VOXEL_SIZE&& voxelIndex.z >= 0;
 }
 
 bool Chunk::ReadyForMeshGeneration() const

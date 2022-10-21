@@ -9,8 +9,10 @@ class Player
 public:
 	Player(const glm::vec3& position);
 
-	const Camera& GetCamera() { return m_camera; }
+	Camera& GetCamera() { return m_camera; }
 	BoxCollider& GetBoxCollider() { return m_collider; }
+	const glm::vec3& GetCameraOffset() { return m_cameraOffset; }
+
 private:
 	glm::vec3 m_position = glm::vec3(0, 100, 0);
 	Camera m_camera;

@@ -27,7 +27,7 @@ private:
 	uint CalcFrameRate(float frameTime);
 	void UpdateCamera(float updateTime, InputData* inputData);
 	void UpdatePlayer(float updateTime, InputData* inputData);
-	void UpdatePhysics();
+	void UpdatePhysics(float timeDelta);
 #ifdef IMGUI_ENABLED
 	void ImGuiBeginRender();
 	void ImGuiRenderStart();
