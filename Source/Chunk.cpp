@@ -72,10 +72,10 @@ void Chunk::CreateResources(const glm::vec3& chunkPos, uint lod)
 	m_chunkPos = chunkPos;
 	m_LOD = lod;
 	m_scale = float(1u << lod);
-	glm::vec3 worldSpacePos = chunkPos * float(CHUNK_UNIT_SIZE);
+	glm::vec3 worldSpacePos = chunkPos;
 	m_AABB = AABB(worldSpacePos, worldSpacePos + glm::vec3(CHUNK_UNIT_SIZE * m_scale));
 
-	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos * float(CHUNK_UNIT_SIZE));
+	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos);
 }
 
 void Chunk::InitShared(
@@ -262,8 +262,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput,
-		(m_chunkPos.x * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
-		(m_chunkPos.z * CHUNK_VOXEL_SIZE - domainTurbulence - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - domainTurbulence - 1) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - domainTurbulence - 1) / m_scale,
 		turbulentRowSize,
 		turbulentRowSize,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
@@ -272,8 +272,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// this is kinda overkill for just the dirt
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput2,
-		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
-		(m_chunkPos.z * CHUNK_VOXEL_SIZE - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
@@ -281,9 +281,9 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	);
 	noiseGeneratorCave->get()->GenUniformGrid3D(
 		noiseOutput3,
-		(m_chunkPos.x * CHUNK_VOXEL_SIZE - 1) / m_scale,
-		(m_chunkPos.y * CHUNK_VOXEL_SIZE - 1) / m_scale,
-		(m_chunkPos.z * CHUNK_VOXEL_SIZE - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
+		(m_chunkPos.y * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
@@ -297,7 +297,7 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	{
 		for (int y = 0; y < INT_CHUNK_VOXEL_SIZE; y++)
 		{
-			float worldSpaceHeight = (y - 1) * m_scale / float(UNIT_VOXEL_RESOLUTION) + m_chunkPos.y * CHUNK_UNIT_SIZE;
+			float worldSpaceHeight = (y - 1) * m_scale * VOXEL_UNIT_SIZE + m_chunkPos.y;
 			for (int x = 0; x < INT_CHUNK_VOXEL_SIZE; x++)
 			{
 				// this can be one level up. move y inwards

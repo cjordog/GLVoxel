@@ -146,14 +146,15 @@ void Octree::GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newC
 		currSizeChunks = 1 << currNode->m_lod;
 
 		// if our position is in range of this lod chunk for current lod
-		if ((abs(currNode->m_centerPos.x - position.x / CHUNK_UNIT_SIZE)) < (currSizeChunks / 2.0f + 3 * currSizeChunks) &&
-			(abs(currNode->m_centerPos.y - position.y / CHUNK_UNIT_SIZE)) < (currSizeChunks / 2.0f + 3 * currSizeChunks) &&
-			(abs(currNode->m_centerPos.z - position.z / CHUNK_UNIT_SIZE)) < (currSizeChunks / 2.0f + 3 * currSizeChunks))
+		float lodDist = (currSizeChunks / 2.0f + 3 * currSizeChunks) * CHUNK_UNIT_SIZE;
+		if ((abs(currNode->m_centerPos.x - position.x)) < lodDist &&
+			(abs(currNode->m_centerPos.y - position.y)) < lodDist &&
+			(abs(currNode->m_centerPos.z - position.z)) < lodDist)
 		{
 			if (currNode->m_children[0] == nullptr)
 			{
 				//CreateChildren(currNode);
- 				float offsetScale = (1 << (currNode->m_lod - 1));
+ 				float offsetScale = (1 << (currNode->m_lod - 1)) * CHUNK_UNIT_SIZE;
 				for (uint i = 0; i < 8; i++)
 				{
 					// any reason this needs to be center pos but chunks are bottom left corner?
@@ -204,7 +205,7 @@ void Octree::GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newC
 		currNode = nodeStack.top();
 		nodeStack.pop();
 		currSizeChunks = 1 << currNode->m_lod;
-		glm::vec3 offset = glm::vec3(-currSizeChunks * 0.5f);
+		glm::vec3 offset = glm::vec3(-currSizeChunks * 0.5f * CHUNK_UNIT_SIZE);
 
 		if (currNode->m_children[0] != nullptr)
 		{
