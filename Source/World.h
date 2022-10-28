@@ -41,7 +41,6 @@ private:
 
 	uint testTex1 = 0, testTex2 = 0;
 
-	Camera m_camera;
 	Camera m_frozenCamera;
 
 	VoxelScene m_voxelScene;
@@ -54,7 +53,7 @@ private:
 
 	uint m_flags = 0;
 
-	float m_speed = 10.0f;
+	//float m_speed = 10.0f;
 
 	Player m_player;
 };

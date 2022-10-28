@@ -25,12 +25,12 @@
 ShaderProgram World::shaderProgram1;
 
 World::World()
-	: m_camera(glm::vec3(0, 80, -10), 0, 90.0f),
-	m_frozenCamera(glm::vec3(0, 80, -10), 0, 90.0f),
+	: m_frozenCamera(glm::vec3(0, 80, -10), 0, 90.0f),
 	m_voxelScene(),
 	m_player(glm::vec3(0, 100, 0))
 {
 	m_flags |= WorldFlags::EnableMT;
+	//m_player.m_collisionCallback = std::bind(&VoxelScene::ResolveCollider, m_voxelScene, std::placeholders::_1, std::placeholders::_2);
 }
 
 bool World::Init()
@@ -74,10 +74,11 @@ void World::Render()
 void World::Update(float updateTime, InputData* inputData)
 {
 	ZoneScoped;
-	m_speed += inputData->m_mouseWheel.y * 2.0f;
-	UpdateCamera(updateTime, inputData);
-	UpdatePhysics(updateTime);
-	UpdatePlayer(updateTime, inputData);
+	//m_speed += inputData->m_mouseWheel.y * 2.0f;
+	//UpdateCamera(updateTime, inputData);
+	m_player.UpdatePosition(updateTime, inputData);
+	//UpdatePhysics(updateTime);
+	m_player.UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_player.GetCamera().GetPosition());
 
 	CalcFrameRate(updateTime);
@@ -141,40 +142,29 @@ uint World::CalcFrameRate(float frameTime)
 	return m_frameRate;
 }
 
-void World::UpdateCamera(float updateTime, InputData* inputData)
-{
-	m_camera.FrameStart();
-	if (!inputData->m_disableMouseLook)
-	{
-		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-		m_camera.Transform(inputData->m_moveInput * m_speed * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
-	}
-
-	m_camera.CalculateFrustum();
-
-	if (!m_freezeCamera)
-	{
-		m_frozenCamera = m_camera;
-	}
-}
-
-// TODO:: should be an update function on player
-void World::UpdatePlayer(float updateTime, InputData* inputData)
-{
-	Camera& camera = m_player.GetCamera();
-	camera.FrameStart();
-	if (!inputData->m_disableMouseLook)
-	{
-		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-		//camera.Transform(inputData->m_moveInput * m_speed * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
-		camera.Transform(m_player.GetBoxCollider().GetMiddleCenter() + m_player.GetCameraOffset(), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
-	}
-	camera.CalculateFrustum();
-}
+//void World::UpdateCamera(float updateTime, InputData* inputData)
+//{
+//	m_camera.FrameStart();
+//	if (!inputData->m_disableMouseLook)
+//	{
+//		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
+//		m_camera.Transform(inputData->m_moveInput * m_speed * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
+//	}
+//
+//	m_camera.CalculateFrustum();
+//
+//	if (!m_freezeCamera)
+//	{
+//		m_frozenCamera = m_camera;
+//	}
+//}
 
 void World::UpdatePhysics(float timeDelta)
 {
-	m_voxelScene.ResolveBoxCollider(m_player.GetBoxCollider(), timeDelta);
+	if (!m_player.GetFreeCam()) 
+	{
+		//m_voxelScene.ResolveCollider(m_player.GetBoxCollider(), timeDelta);
+	}
 }
 
 #ifdef IMGUI_ENABLED
@@ -191,7 +181,7 @@ void World::ImGuiRenderStart()
 	// render your GUI
 	ImGui::Begin("Demo window");
 	ImGui::Text("Framerate: %d", m_frameRate);
-	glm::vec3 cameraPos = m_player.GetCamera().GetPosition();
+	glm::vec3 cameraPos = m_player.GetBoxCollider().GetPosition();
 	ImGui::Text("Position x:%.2f y:%.4f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
 }

@@ -207,7 +207,7 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 	glBindVertexBuffer(0, m_VBO, 0, sizeof(VertexPCN));
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
 
-	//glBindVertexArray(m_VAO);
+	glUniformMatrix4fv(0, 1, GL_FALSE, &m_modelMat[0][0]);
 
 	uint dm = (drawMode == RenderSettings::DrawMode::Triangles ? GL_TRIANGLES : GL_LINES);
 	glDrawElements(dm, m_indexCount, GL_UNSIGNED_INT, 0);

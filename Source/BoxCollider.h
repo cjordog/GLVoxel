@@ -9,8 +9,9 @@ public:
 	BoxCollider();
 	BoxCollider(const glm::vec3& centerPosition, const glm::vec3& size);
 
-	glm::vec3 GetMiddleCenter() { return m_AABB.center - glm::vec3(0, m_AABB.extents.y, 0); }
-	void SetMiddleCenter(const glm::vec3& pos) { m_AABB.center = pos + glm::vec3(0, m_AABB.extents.y, 0); }
+	const glm::vec3 GetPosition() const override { return (m_AABB.center - glm::vec3(0.0f, m_AABB.extents.y, 0.0f)); }
+	void Translate(const glm::vec3& pos) override { m_AABB.center += pos; m_desiredPosition = GetPosition(); }
+	void TranslateAndResolve(const glm::vec3& pos) override { m_desiredPosition += pos; }
 private:
 	AABB m_AABB;
 };

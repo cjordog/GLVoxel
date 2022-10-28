@@ -191,7 +191,9 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	ZoneNamed(SetupRender, true);
 	s_chunkShaderProgram.Use();
 	m_projMat = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
-	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
+	glUniformMatrix4fv(2, 1, GL_FALSE, &m_projMat[0][0]);
+	glUniformMatrix4fv(1, 1, GL_FALSE, &camera->GetViewMatrix()[0][0]);
+	glUniform3fv(50, 1, &camera->GetPosition()[0]);
 
 	RenderSettings::DrawMode drawMode = RenderSettings::Get().m_drawMode;
 
@@ -228,8 +230,6 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 
 		if (chunk->IsInFrustum(debugCullCamera->GetFrustum()))
 		{
-			chunk->GetModelMat(modelMat);
-			glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 			vertexCount += chunk->GetVertexCount();
 			totalGenTime += chunk->m_genTime;
 			numRenderChunks++;
@@ -250,45 +250,47 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 // since velocity * frameDelta buffers are so small, could we not just look if vector goes into new block. 
 // if it does, check that block. resolve vectors easily. small edge cases when crossing multiple borders. could then fallback to amanatides and woo 
 // but that would almost never happen with these vector sizes? maybe lower framerates it could
-void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
+void VoxelScene::ResolveCollider(Collider& collider, float timeDelta)
 {
 	// just do this terribleness for now. i dont want to deal with physics rn
-	glm::vec3 worldPos = collider.GetMiddleCenter();
+	glm::vec3 worldPos = collider.GetPosition();
 
 	// need to solve edge case if outside the octree
 	Chunk* currChunk = m_octree.GetChunkAtWorldPos(worldPos);
 	if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
 		return;
 
+	glm::vec3 movementDir = collider.m_desiredPosition - worldPos;
+
 	glm::vec3 velocity = collider.GetVelocity();
 	velocity = velocity + glm::vec3(0, -10, 0) * (timeDelta / 1000.f);
 	collider.SetVelocity(velocity);
-	const float maxT = (timeDelta / 1000.f);
+	glm::vec3 targetDir = velocity * (timeDelta / 1000.f) + movementDir;
 
 	glm::i32vec3 voxelIndex;
 	bool ret = currChunk->GetVoxelIndexAtWorldPos(worldPos, voxelIndex);
-	const int stepX = velocity.x > 0 ? 1 : (velocity.x < 0 ? -1 : 0);
-	const int stepY = velocity.y > 0 ? 1 : (velocity.y < 0 ? -1 : 0);
-	const int stepZ = velocity.z > 0 ? 1 : (velocity.z < 0 ? -1 : 0);
+	const int stepX = targetDir.x > 0 ? 1 : (targetDir.x < 0 ? -1 : 0);
+	const int stepY = targetDir.y > 0 ? 1 : (targetDir.y < 0 ? -1 : 0);
+	const int stepZ = targetDir.z > 0 ? 1 : (targetDir.z < 0 ? -1 : 0);
 	const glm::i32vec3 step(stepX, stepY, stepZ);
 
 	glm::vec3 chunkPos = currChunk->GetChunkPos();
 
-	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.x), 0.000001f);
-	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.y), 0.000001f);
-	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(velocity.z), 0.000001f);
+	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.x), 0.000001f);
+	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.y), 0.000001f);
+	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.z), 0.000001f);
 
 	glm::vec3 voxelBorder = glm::vec3(voxelIndex + glm::max(step, 0)) * VOXEL_UNIT_SIZE;
 	glm::vec3 tMax = (voxelBorder - (worldPos - chunkPos));
-	tMax.x = velocity.x != 0.0f ? tMax.x / velocity.x : 1000000.f;
-	tMax.y = velocity.y != 0.0f ? tMax.y / velocity.y : 1000000.f;
-	tMax.z = velocity.z != 0.0f ? tMax.z / velocity.z : 1000000.f;
+	tMax.x = targetDir.x != 0.0f ? tMax.x / targetDir.x : 1000000.f;
+	tMax.y = targetDir.y != 0.0f ? tMax.y / targetDir.y : 1000000.f;
+	tMax.z = targetDir.z != 0.0f ? tMax.z / targetDir.z : 1000000.f;
 
 	bool exitedChunk = false;
 	int exitIndex = 0;
 	float lastT = 0;
 	bool collided = false;
-	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < maxT)
+	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < 1.0f)
 	{
 		if (tMax.x < tMax.y)
 		{
@@ -332,22 +334,21 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 		if (exitedChunk)
 		{
 			// bump a little in that direction to make sure were in that new chunk and not right on the edge
-			glm::vec3 currPos = worldPos + velocity * (lastT + 0.01f);
+			glm::vec3 currPos = worldPos + targetDir * (lastT + 0.001f);
 			currChunk = m_octree.GetChunkAtWorldPos(currPos);
 			currChunk->GetVoxelIndexAtWorldPos(currPos, voxelIndex);
 			exitedChunk = false;
 		}
 	}
 
-
-	worldPos += velocity * std::min(maxT, lastT);
-	collider.SetMiddleCenter(worldPos);
-	if (lastT < maxT) 
+	collider.Translate(targetDir * std::min(1.0f, lastT));
+	if (lastT < 1.0f) 
 	{
 		velocity[exitIndex] = 0.0f;
+		collider.SetVelocity(velocity);
 	}
 
-	if (exitIndex == 1)
+	if (collided && exitIndex == 1)
 	{
 		 collider.isGrounded = true;
 	}

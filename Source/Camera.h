@@ -16,6 +16,8 @@ public:
 
 	const glm::mat4& GetViewMatrix() const { return m_viewMatrix; }
 	const glm::vec3& GetPosition() const { return m_position; }
+	const glm::vec3& GetForward() const { return m_forward; }
+	const glm::vec3& GetRight() const { return m_right; }
 	float GetAspectRatio() const { return m_aspectRatio; }
 	float GetFovX() const { return m_fovX; }
 	float GetFovY() const { return m_fovX / m_aspectRatio; }
@@ -26,15 +28,15 @@ public:
 	void FrameStart();
 
 private:
-	glm::vec3 m_position;
-	glm::mat4 m_viewMatrix;
+	glm::vec3 m_position = glm::vec3(0);
+	glm::mat4 m_viewMatrix = glm::mat4(1);
 	Frustum m_frustum;
 
 	float m_pitch = 0.0f;
 	float m_yaw = 90.0f;
-	glm::vec3 m_forward;
-	glm::vec3 m_right;
-	glm::vec3 m_up;
+	glm::vec3 m_forward = glm::vec3(0);
+	glm::vec3 m_right = glm::vec3(0);
+	glm::vec3 m_up = glm::vec3(0);
 
 	float m_aspectRatio = 4.0f / 3.0f;
 	float m_fovX = glm::radians(90.0f);

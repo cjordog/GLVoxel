@@ -212,8 +212,8 @@ struct BoundingVolume
 
 struct AABB : public BoundingVolume
 {
-	glm::vec3 center{ 0.f, 0.f, 0.f };
-	glm::vec3 extents{ 0.f, 0.f, 0.f };
+	glm::vec3 center = glm::vec3(0);
+	glm::vec3 extents = glm::vec3(0);
 
 	AABB() {};
 
@@ -224,12 +224,8 @@ struct AABB : public BoundingVolume
 	{};
 
 	AABB(const glm::vec3& inCenter, float iI, float iJ, float iK)
-		: BoundingVolume{}, center{ inCenter }, extents{ iI, iJ, iK }
+		: center(inCenter), extents(iI, iJ, iK)
 	{};
-
-	AABB(const glm::vec3& inCenter, const glm::vec3& extent, bool f)
-		: BoundingVolume{}, center(inCenter), extents(extent)
-	{f; };
 
 	bool IsInFrustum(const Frustum& camFrustum, const glm::mat4& transform) const override
 	{

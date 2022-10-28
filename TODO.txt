@@ -6,6 +6,7 @@ X block types
 - all things rendering
 	- lighting
 	- shadows
+	- TAA
 - greedy meshing?
 - switch to rle?
 - compute or geo shader for voxel generation?
