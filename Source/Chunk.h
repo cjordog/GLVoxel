@@ -19,10 +19,10 @@ public:
 	struct ChunkGenParams
 	{
 		float caveFrequency = 1;
-		float terrainHeight = 100.0f;
-		float terrainLacunarity = 1.0f;
-		float terrainGain = 1.0f;
-		float terrainFrequency = 1.0f;
+		float terrainHeight = 400.0f;
+		float terrainLacunarity = 2.5f;
+		float terrainGain = 0.4f;
+		float terrainFrequency = 0.25f;
 		int terrainOctaves = 4;
 
 		bool operator!=(const ChunkGenParams& rhs)

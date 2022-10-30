@@ -42,5 +42,4 @@ void main()
 	vec3 ambient = ambientColor * ambientStrength;
 	vec3 camToFrag = outPos.xyz - cameraPos;
 	FragColor = vec4(ApplyFog(ambient + diffuse, length(camToFrag), cameraPos, normalize(camToFrag)), 1.0f);
-
 } 
