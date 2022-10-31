@@ -58,53 +58,44 @@ void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newCh
 
 		// if our position is in range of this lod chunk for current lod
 		float lodDist = ((CHUNK_LOD_RADIUS + 0.5f) * currSizeChunks) * CHUNK_UNIT_SIZE;
-		if ((abs(currNode->m_centerPos.x - position.x)) < lodDist &&
+		if (currNode->m_lod > 0 && 
+			(abs(currNode->m_centerPos.x - position.x)) < lodDist &&
 			(abs(currNode->m_centerPos.y - position.y)) < lodDist &&
 			(abs(currNode->m_centerPos.z - position.z)) < lodDist)
 		{
-			if (currNode->m_lod == 0)
+			if (currNode->m_chunk && currNode->m_chunk->IsDeletable()/* && HasFinishedSubtree(currNode)*/)
 			{
-				if (currNode->m_chunk == nullptr)
-				{
-					glm::vec3 chunkNodeOffset = glm::vec3(-currSizeChunks * 0.5f * CHUNK_UNIT_SIZE);
-					Chunk* chunk = new Chunk(currNode->m_centerPos + chunkNodeOffset, currNode->m_lod);
-					newChunks.push_back(chunk);
-					currNode->m_chunk = chunk;
-				}
+				delete currNode->m_chunk;
+				currNode->m_chunk = nullptr;
 			}
-			else
+			if (currNode->m_children[0] == nullptr)
 			{
-				if (currNode->m_chunk && currNode->m_chunk->IsDeletable()/* && HasFinishedSubtree(currNode)*/)
-				{
-					delete currNode->m_chunk;
-					currNode->m_chunk = nullptr;
-				}
-				if (currNode->m_children[0] == nullptr)
-				{
-					for (uint i = 0; i < 8; i++)
-					{
-						float childOffsetScale = (1 << (currNode->m_lod - 1)) * CHUNK_UNIT_SIZE;
-						glm::vec3 centerPos = currNode->m_centerPos + s_centerOctreeOffsets[i] * childOffsetScale;
-						currNode->m_children[i] = std::make_shared<OctreeNode>(centerPos, currNode->m_lod - 1);
-					}
-				}
 				for (uint i = 0; i < 8; i++)
 				{
-					nodeStack.push(currNode->m_children[i]);
+					float childOffsetScale = (1 << (currNode->m_lod - 1)) * CHUNK_UNIT_SIZE;
+					glm::vec3 centerPos = currNode->m_centerPos + s_centerOctreeOffsets[i] * childOffsetScale;
+					currNode->m_children[i] = std::make_shared<OctreeNode>(centerPos, currNode->m_lod - 1);
 				}
+			}
+			for (uint i = 0; i < 8; i++)
+			{
+				nodeStack.push(currNode->m_children[i]);
 			}
 		}
 		// otherwise back out and process other nodes
 		else
 		{
-			if (!currNode->m_chunk)
+			if (currNode->m_chunk == nullptr)
 			{
 				glm::vec3 chunkNodeOffset = glm::vec3(-currSizeChunks * 0.5f * CHUNK_UNIT_SIZE);
 				Chunk* chunk = new Chunk(currNode->m_centerPos + chunkNodeOffset, currNode->m_lod);
 				newChunks.push_back(chunk);
 				currNode->m_chunk = chunk;
 			}
-			ReleaseChildren(currNode);
+			if (currNode->m_lod > 0)
+			{
+				ReleaseChildren(currNode);
+			}
 		}
 
 		if (currNode->m_chunk)
