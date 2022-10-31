@@ -195,6 +195,7 @@ int Octree::GetChildIndex(const glm::vec3& positionInNode)
 
 bool Octree::ReleaseChildren(std::shared_ptr<OctreeNode> node)
 {
+	ZoneScoped;
 	if (node->m_children[0] == nullptr)
 	{
 		return (node->m_chunk == nullptr || node->m_chunk->IsDeletable());

@@ -35,7 +35,7 @@ private:
 	int m_size = 0;		// size in chunks
 	int m_maxDepth = 0;
 	glm::vec3 m_centerPos = glm::vec3(0);
-	MemPooler<Chunk> m_memPool;
+	//MemPooler<Chunk> m_memPool;
 
 	static inline int GetChildIndex(const glm::vec3& positionInNode);
 

@@ -67,6 +67,11 @@ public:
 		Done
 	};
 
+	struct VoxelData
+	{
+		BlockType m_voxels[INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE] = { BlockType(0) };
+	};
+
 	static void InitShared(
 		std::unordered_map<std::thread::id, int>& threadIDs, 
 		std::function<void(Chunk*)> generateMeshCallback, 
@@ -129,9 +134,11 @@ private:
 	// hard to tell whats better
 	// 
 	// maybe dont need to store the extra edges all the time?
-	BlockType m_voxels[INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE] = { BlockType(0) };
+	VoxelData* m_voxelData = nullptr;
+
 	//TODO:: call reserve on these with some sane value
 	std::vector<VertexPCN> m_vertices = std::vector<VertexPCN>();
+	// is there some way to get rid of this... this is a lot of data that is relatively static
 	std::vector<uint> m_indices = std::vector<uint>();
 
 	// testing with these being atomic. dunno if its better/worse/blegh

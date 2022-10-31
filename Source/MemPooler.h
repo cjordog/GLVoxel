@@ -3,21 +3,21 @@
 #include "Common.h"
 #include <vector>
 #include <queue>
+#include <mutex>
 
 template <typename T> class MemPooler
 {
 public:
-	MemPooler() 
+	MemPooler(int elements) 
 	{
 		m_reclaimedItems = std::queue<T*>();
-		// this is just.. awful
-		m_data = (T*)malloc(sizeof(T) * 20000);
+		m_data.reserve(elements);
+		size = elements;
 	}
 
 	T* New()
 	{
-		if (maxIndex >= 4096)
-			assert(false);
+		std::lock_guard<std::mutex> lock(m_mutex);
 		if (m_reclaimedItems.size())
 		{
 			T* mem = m_reclaimedItems.front();
@@ -26,20 +26,28 @@ public:
 		}
 		else
 		{
-			return &m_data[maxIndex++];
+			int cap = m_data.capacity();
+			T* t = &m_data.emplace_back();
+			assert(cap == m_data.capacity());
+			return t;
 		}
 	}
 
 	void Free(T* obj)
 	{
-		// we should probably call some sort of free on the item for things like vertex arrays on Chunks? will happen when it gets recycled but..
-		m_reclaimedItems.push(obj);
-		m_hasReclaimedItems = true;
+		if (obj != nullptr)
+		{
+			std::lock_guard<std::mutex> lock(m_mutex);
+			m_reclaimedItems.push(obj);
+		}
 	}
 
 private:
-	T* m_data;
+	//T* m_data;
+	std::vector<T> m_data;
 	std::queue<T*> m_reclaimedItems;
+	std::mutex m_mutex;
 	int maxIndex = 0;
+	int size = 0;
 	bool m_hasReclaimedItems = false;
 };
