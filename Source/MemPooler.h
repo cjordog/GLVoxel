@@ -4,6 +4,7 @@
 #include <vector>
 #include <queue>
 #include <mutex>
+#include <iostream>
 
 template <typename T> class MemPooler
 {
@@ -28,7 +29,11 @@ public:
 		{
 			int cap = m_data.capacity();
 			T* t = &m_data.emplace_back();
-			assert(cap == m_data.capacity());
+			if (cap != m_data.capacity())
+			{
+				assert(false);
+				fprintf(stderr, "mempool resize!!!\n");
+			}
 			return t;
 		}
 	}

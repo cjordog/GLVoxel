@@ -22,7 +22,7 @@ public:
 		float terrainHeight = 400.0f;
 		float terrainLacunarity = 2.5f;
 		float terrainGain = 0.4f;
-		float terrainFrequency = 0.25f;
+		float terrainFrequency = 0.16f;
 		int terrainOctaves = 4;
 
 		bool operator!=(const ChunkGenParams& rhs)

@@ -28,6 +28,7 @@ static glm::vec3 s_cornerOctreeOffsets[8] =
 	{-1.0f, -1.0f, -1.0f}
 };
 
+const float CHUNK_LOD_RADIUS = 3;
 Octree::Octree()
 {
 	m_centerPos = glm::vec3(0);
@@ -39,6 +40,78 @@ Octree::Octree()
 #endif
 	m_maxDepth = std::max(numLODs, 1); //log2(size) - 1
 	m_root = std::make_shared<OctreeNode>(nullptr, m_centerPos, m_maxDepth);
+}
+
+void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks)
+{
+	ZoneScoped;
+	//chunksToGenerate.reserve(128);
+	std::stack<std::shared_ptr<OctreeNode>> nodeStack;
+	int currSizeChunks = m_size;
+	std::shared_ptr<OctreeNode> currNode;
+	nodeStack.push(m_root);
+	while (!nodeStack.empty())
+	{
+		currNode = nodeStack.top();
+		nodeStack.pop();
+		currSizeChunks = 1 << currNode->m_lod;
+
+		// if our position is in range of this lod chunk for current lod
+		float lodDist = ((CHUNK_LOD_RADIUS + 0.5f) * currSizeChunks) * CHUNK_UNIT_SIZE;
+		if ((abs(currNode->m_centerPos.x - position.x)) < lodDist &&
+			(abs(currNode->m_centerPos.y - position.y)) < lodDist &&
+			(abs(currNode->m_centerPos.z - position.z)) < lodDist)
+		{
+			if (currNode->m_lod == 0)
+			{
+				if (currNode->m_chunk == nullptr)
+				{
+					glm::vec3 chunkNodeOffset = glm::vec3(-currSizeChunks * 0.5f * CHUNK_UNIT_SIZE);
+					Chunk* chunk = new Chunk(currNode->m_centerPos + chunkNodeOffset, currNode->m_lod);
+					newChunks.push_back(chunk);
+					currNode->m_chunk = chunk;
+				}
+			}
+			else
+			{
+				if (currNode->m_chunk && currNode->m_chunk->IsDeletable()/* && HasFinishedSubtree(currNode)*/)
+				{
+					delete currNode->m_chunk;
+					currNode->m_chunk = nullptr;
+				}
+				if (currNode->m_children[0] == nullptr)
+				{
+					for (uint i = 0; i < 8; i++)
+					{
+						float childOffsetScale = (1 << (currNode->m_lod - 1)) * CHUNK_UNIT_SIZE;
+						glm::vec3 centerPos = currNode->m_centerPos + s_centerOctreeOffsets[i] * childOffsetScale;
+						currNode->m_children[i] = std::make_shared<OctreeNode>(centerPos, currNode->m_lod - 1);
+					}
+				}
+				for (uint i = 0; i < 8; i++)
+				{
+					nodeStack.push(currNode->m_children[i]);
+				}
+			}
+		}
+		// otherwise back out and process other nodes
+		else
+		{
+			if (!currNode->m_chunk)
+			{
+				glm::vec3 chunkNodeOffset = glm::vec3(-currSizeChunks * 0.5f * CHUNK_UNIT_SIZE);
+				Chunk* chunk = new Chunk(currNode->m_centerPos + chunkNodeOffset, currNode->m_lod);
+				newChunks.push_back(chunk);
+				currNode->m_chunk = chunk;
+			}
+			ReleaseChildren(currNode);
+		}
+
+		if (currNode->m_chunk)
+		{
+			leafChunks.push_back(currNode->m_chunk);
+		}
+	}
 }
 
 void Octree::GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks)
@@ -84,15 +157,27 @@ void Octree::GenerateFromPosition2(glm::vec3 position, std::vector<Chunk*>& newC
 			// if we have children, but also a chunk. chunk is old lod. get it outta here
 			if (currNode->m_chunk && currNode->m_chunk->IsDeletable())
 			{
-				delete currNode->m_chunk;
-				currNode->m_chunk = nullptr;
+				bool deletable = true;
+				for (uint i = 0; i < 8; i++)
+				{
+					// checking !currNode->m_children[i]->m_chunk might cause mem leaks?
+					if (!currNode->m_children[i]->m_chunk || !currNode->m_children[i]->m_chunk->IsDeletable())
+					{
+						deletable = false;
+					}
+				}
+				if (deletable)
+				{
+					delete currNode->m_chunk;
+					currNode->m_chunk = nullptr;
+				}
 			}
 		}
 		// otherwise back out and process other nodes
 		else
 		{
 			// if were totally out of range of this lod, we shouldnt have children
-			if (currNode->m_children[0] != nullptr)
+			if (currNode->m_children[0] != nullptr && currNode->m_chunk && currNode->m_chunk->IsDeletable())
 			{
 				// if false, we need to iterate subtree and add leaf nodes to leafChunks array
 				ReleaseChildren(currNode);

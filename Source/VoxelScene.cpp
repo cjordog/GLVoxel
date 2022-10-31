@@ -141,7 +141,7 @@ void VoxelScene::Update(const glm::vec3& position)
 	}
 	m_frameChunks.clear();
 	std::vector<Chunk*> newChunks;
-	m_octree.GenerateFromPosition2(position, newChunks, m_frameChunks);
+	m_octree.GenerateFromPosition(position, newChunks, m_frameChunks);
 	for (Chunk* chunk : newChunks)
 	{
 		m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk, &m_noiseGenerator, &m_noiseGeneratorCave), Priority_Med);
