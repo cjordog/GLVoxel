@@ -381,9 +381,10 @@ void VoxelScene::GatherBoundingBoxes()
 	m_aabbVerts.clear();
 	m_aabbIndices.clear();
 	//for (const auto& chunk : m_renderList)
-	for (const auto& chunk : m_frameChunks)
+	for (const Chunk* chunk : m_frameChunks)
 	{
-		FillBoundingBoxBuffer(chunk->GetBoundingBox());
+		if (!chunk->IsEmpty())
+			FillBoundingBoxBuffer(chunk->GetBoundingBox());
 	}
 }
 
