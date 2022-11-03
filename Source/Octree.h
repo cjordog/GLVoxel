@@ -42,4 +42,6 @@ private:
 	void CreateChildren(std::shared_ptr<OctreeNode> parent);
 	bool ReleaseChildren(std::shared_ptr<OctreeNode> node);
 	bool ReleaseChildrenBlocking(std::shared_ptr<OctreeNode> node);
+	void AddChildrenToVector(std::shared_ptr<OctreeNode> node, std::vector<Chunk*>& leafChunks);
+	bool HasFinishedSubtree(std::shared_ptr<OctreeNode> node);
 };

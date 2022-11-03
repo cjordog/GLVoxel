@@ -92,6 +92,7 @@ public:
 	const AABB& GetBoundingBox() const { return m_AABB; }
 	const uint GetLOD() const { return m_LOD; }
 	bool IsDeletable() const { return m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers; }
+	bool IsDone() const { return m_state == ChunkState::Done; }
 	glm::vec3 GetChunkPos() { return m_chunkPos; }
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
