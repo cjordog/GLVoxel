@@ -32,6 +32,7 @@ int Window::Init()
 		return -1;
 	}
 	glfwMakeContextCurrent(m_window);
+	glfwSwapInterval(0);
 	glfwSetFramebufferSizeCallback(m_window, framebuffer_size_callback);
 	return 0;
 }
