@@ -66,19 +66,19 @@ VoxelScene::VoxelScene()
 	//https://riptutorial.com/opengl/example/28662/version-4-3
 	constexpr int vertexBindingPoint = 0;// free to choose, must be less than the GL_MAX_VERTEX_ATTRIB_BINDINGS limit
 
-	glVertexAttribFormat(0, 3, GL_FLOAT, false, offsetof(VertexPCN, position));
+	glVertexAttribIFormat(0, 1, GL_UNSIGNED_INT, 0);
 	// set the details of a single attribute
 	glVertexAttribBinding(0, vertexBindingPoint);
 	// which buffer binding point it is attached to
 	glEnableVertexAttribArray(0);
 
-	glVertexAttribFormat(1, 3, GL_FLOAT, false, offsetof(VertexPCN, color));
-	glVertexAttribBinding(1, vertexBindingPoint);
-	glEnableVertexAttribArray(1);
+	//glVertexAttribFormat(1, 3, GL_FLOAT, false, offsetof(VertexPCN, color));
+	//glVertexAttribBinding(1, vertexBindingPoint);
+	//glEnableVertexAttribArray(1);
 
-	glVertexAttribFormat(2, 3, GL_FLOAT, false, offsetof(VertexPCN, normal));
-	glVertexAttribBinding(2, vertexBindingPoint);
-	glEnableVertexAttribArray(2);
+	//glVertexAttribFormat(2, 3, GL_FLOAT, false, offsetof(VertexPCN, normal));
+	//glVertexAttribBinding(2, vertexBindingPoint);
+	//glEnableVertexAttribArray(2);
 
 	glGenBuffers(1, &m_aabbVBO);
 	glGenBuffers(1, &m_aabbEBO);

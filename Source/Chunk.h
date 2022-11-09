@@ -85,8 +85,8 @@ public:
 	//bool BlockIsOpaque(BlockType t);
 
 	void GetModelMat(glm::mat4& mat) { mat = m_modelMat; }
-	float* GetVertexData() { return (float*)(m_vertices.data()); }
-	uint* GetIndexData() { return m_indices.data(); }
+	//float* GetVertexData() { return (float*)(m_vertices.data()); }
+	//uint* GetIndexData() { return m_indices.data(); }
 	uint GetVertexCount() { return m_vertexCount; }
 	uint GetIndexCount() { return m_indexCount; }
 	const AABB& GetBoundingBox() const { return m_AABB; }
@@ -138,9 +138,9 @@ private:
 	VoxelData* m_voxelData = nullptr;
 
 	//TODO:: call reserve on these with some sane value
-	std::vector<VertexPCN> m_vertices = std::vector<VertexPCN>();
+	std::vector<uint> m_vertices = std::vector<uint>();
 	// is there some way to get rid of this... this is a lot of data that is relatively static
-	std::vector<uint> m_indices = std::vector<uint>();
+	//std::vector<uint> m_indices = std::vector<uint>();
 
 	// testing with these being atomic. dunno if its better/worse/blegh
 	std::atomic<Chunk*> m_neighbors[BlockFace::NumFaces] = { nullptr };

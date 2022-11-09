@@ -58,7 +58,7 @@ void Chunk::ReleaseResources()
 		m_neighbors[i] = 0;
 
 	m_vertices.clear();
-	m_indices.clear();
+	//m_indices.clear();
 
 	m_vertexCount = 0;
 	m_indexCount = 0;
@@ -82,7 +82,7 @@ void Chunk::CreateResources(const glm::vec3& chunkPos, uint lod)
 	glm::vec3 worldSpacePos = chunkPos;
 	m_AABB = AABB(worldSpacePos, worldSpacePos + glm::vec3(CHUNK_UNIT_SIZE * m_scale));
 
-	m_modelMat = glm::translate(glm::mat4(1.0f), m_chunkPos);
+	m_modelMat = glm::scale(glm::translate(glm::mat4(1.0f), m_chunkPos), glm::vec3(float(m_scale / UNIT_VOXEL_RESOLUTION)));
 }
 
 void Chunk::InitShared(
@@ -204,31 +204,22 @@ bool Chunk::Renderable() const
 
 void Chunk::Render(RenderSettings::DrawMode drawMode)
 {
-	// might not have to lock if we had a separate chunk render list?
-	//std::unique_lock lock(m_mutex, std::try_to_lock);
-	//if (!lock.owns_lock()) {
-	//	return;
-	//}
-
 	if (!m_meshGenerated)
 		return;
 
-	//glBindVertexBuffer(0, m_VBO);
 	//maybe shouldnt be in render?
 	if (!m_buffersGenerated)
 	{
-		//glBindVertexArray(m_VAO);
-
 		glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
-		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(VertexPCN), (float*)m_vertices.data(), GL_STATIC_DRAW);
-		//glNamedBufferSubData(m_VBO, 0, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data());
-		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
-		//glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
+		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(uint), (uint*)m_vertices.data(), GL_STATIC_DRAW);
 
+		m_vertices.clear();
+		m_vertices.resize(0);
 		m_buffersGenerated = true;
 		m_state = ChunkState::Done;
 	}
-	glBindVertexBuffer(0, m_VBO, 0, sizeof(VertexPCN));
+	glBindVertexBuffer(0, m_VBO, 0, sizeof(uint));
+	// this only needs to be bound once
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s_chunkEBO);
 
 	glUniformMatrix4fv(0, 1, GL_FALSE, &m_modelMat[0][0]);
@@ -403,7 +394,7 @@ void Chunk::GenerateMesh()
 	m_indexCount = 0;
 
 	m_vertices.clear();
-	m_indices.clear();
+	//m_indices.clear();
 
 	lock.unlock();
 
@@ -460,6 +451,7 @@ bool Chunk::IsInFrustum(const Frustum& f) const
 
 void Chunk::GenerateMeshInt()
 {
+	assert(CHUNK_VOXEL_SIZE < 64);
 	std::lock_guard lock(m_mutex);
 	for (uint x = 0; x < CHUNK_VOXEL_SIZE; x++)
 	{
@@ -478,19 +470,17 @@ void Chunk::GenerateMeshInt()
 						int neighborY = y + normal.y + 1;
 						int neighborZ = z + normal.z + 1;
 
-
 						if (BlockIsOpaque(m_voxelData->m_voxels[neighborX][neighborY][neighborZ]))
 							continue;
 
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
-							m_vertices.emplace_back((s_faces[i][j] + offset) * float(m_scale / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]);
+							// vertex packing idea from https://www.youtube.com/watch?v=VQuN1RMEr1c
+							glm::uvec3 localVertexPos = (s_faces[i][j] + offset);
+							uint packedVertex = (0x3F & localVertexPos.x) | (0xFC0 & (localVertexPos.y << 6)) | (0x3F000 & (localVertexPos.z << 12)) | (0x1C0000 & (i << 18)) | (0x1FE00000 & (uint8_t(currentBlockType) << 21));
+							m_vertices.push_back(packedVertex);
 						}
-						//for (uint j = 0; j < 6; j++)
-						//{
-						//	m_indices.push_back(s_indices[j] + m_vertexCount);
-						//}
 						m_indexCount += 6;
 						m_vertexCount += 4;
 						//m_indices.insert(m_indices.end(), std::begin(indices), std::end(indices));
@@ -646,11 +636,11 @@ void Chunk::GenerateGreedyMeshInt()
 						// add faces
 						for (uint m = 0; m < 4; m++)
 						{
-							m_vertices.push_back(VertexPCN{ vertices[m], sweepDir, normal });
+							//m_vertices.push_back(VertexPCN{ vertices[m], sweepDir, normal });
 						}
 						for (uint m = 0; m < 6; m++)
 						{
-							m_indices.push_back(indices[maskVal - 1][m] + m_vertexCount);
+							//m_indices.push_back(indices[maskVal - 1][m] + m_vertexCount);
 						}
 						m_indexCount += 6;
 						m_vertexCount += 4;
