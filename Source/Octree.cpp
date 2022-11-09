@@ -92,13 +92,16 @@ void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newCh
 				newChunks.push_back(chunk);
 				currNode->m_chunk = chunk;
 			}
-			if (currNode->m_children[0] != nullptr && currNode->m_chunk->IsDeletable() && HasFinishedSubtree(currNode))
+			if (currNode->m_children[0] != nullptr)
 			{
-				ReleaseChildren(currNode);
-			}
-			else
-			{
-				AddChildrenToVector(currNode, leafChunks);
+				if (currNode->m_chunk->IsDeletable() && HasFinishedSubtree(currNode))
+				{
+					ReleaseChildren(currNode);
+				}
+				else
+				{
+					AddChildrenToVector(currNode, leafChunks);
+				}
 			}
 		}
 
