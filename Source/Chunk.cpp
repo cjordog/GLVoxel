@@ -24,10 +24,12 @@ static const Chunk::ChunkGenParams* s_chunkGenParams = nullptr;
 // can solve for this inital value
 static MemPooler<Chunk::VoxelData> s_memPool(15000);
 
+static std::vector<uint> s_chunkIndices;
+uint s_chunkEBO = 0;
+
 Chunk::Chunk()
 {
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
-	glGenVertexArrays(1, &m_VAO);
 	glGenBuffers(1, &m_VBO);
 	glGenBuffers(1, &m_EBO);
 }
@@ -44,7 +46,6 @@ Chunk::Chunk(
 
 Chunk::~Chunk()
 {
-	glDeleteVertexArrays(1, &m_VAO);
 	glDeleteBuffers(1, &m_VBO);
 	glDeleteBuffers(1, &m_EBO);
 
@@ -103,11 +104,29 @@ void Chunk::InitShared(
 	s_chunkGenParams = chunkGenParams;
 
 	//s_memPool = MemPooler<VoxelData>(15000);
+
+	constexpr uint MAX_FACES = 100000;
+	uint indexCount = MAX_FACES * 6;
+	s_chunkIndices.reserve(indexCount);
+	uint vertexCount = 0;
+	for (uint i = 0; i < MAX_FACES; i++)
+	{
+		for (uint j = 0; j < 6; j++)
+		{
+			s_chunkIndices.push_back(s_indices[j] + vertexCount);
+		}
+		vertexCount += 4;
+	}
+
+	glGenBuffers(1, &s_chunkEBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s_chunkEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, indexCount * sizeof(uint), s_chunkIndices.data(), GL_STATIC_DRAW);
 }
 
 void Chunk::DeleteShared()
 {
 	delete s_sharedScratchpadMemory;
+	glDeleteBuffers(1, &s_chunkEBO);
 }
 
 inline bool BlockIsOpaque(Chunk::BlockType t)
@@ -203,14 +222,14 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 		glBindBuffer(GL_ARRAY_BUFFER, m_VBO);
 		glBufferData(GL_ARRAY_BUFFER, m_vertexCount * sizeof(VertexPCN), (float*)m_vertices.data(), GL_STATIC_DRAW);
 		//glNamedBufferSubData(m_VBO, 0, m_vertexCount * sizeof(Vertex), (float*)m_vertices.data());
-		glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
-		glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
+		//glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
+		//glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_indexCount * sizeof(uint), m_indices.data(), GL_STATIC_DRAW);
 
 		m_buffersGenerated = true;
 		m_state = ChunkState::Done;
 	}
 	glBindVertexBuffer(0, m_VBO, 0, sizeof(VertexPCN));
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_EBO);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, s_chunkEBO);
 
 	glUniformMatrix4fv(0, 1, GL_FALSE, &m_modelMat[0][0]);
 
@@ -459,6 +478,7 @@ void Chunk::GenerateMeshInt()
 						int neighborY = y + normal.y + 1;
 						int neighborZ = z + normal.z + 1;
 
+
 						if (BlockIsOpaque(m_voxelData->m_voxels[neighborX][neighborY][neighborZ]))
 							continue;
 
@@ -467,10 +487,10 @@ void Chunk::GenerateMeshInt()
 						{
 							m_vertices.emplace_back((s_faces[i][j] + offset) * float(m_scale / UNIT_VOXEL_RESOLUTION), GetBlockColor(currentBlockType), s_blockNormals[i]);
 						}
-						for (uint j = 0; j < 6; j++)
-						{
-							m_indices.emplace_back(s_indices[j] + m_vertexCount);
-						}
+						//for (uint j = 0; j < 6; j++)
+						//{
+						//	m_indices.push_back(s_indices[j] + m_vertexCount);
+						//}
 						m_indexCount += 6;
 						m_vertexCount += 4;
 						//m_indices.insert(m_indices.end(), std::begin(indices), std::end(indices));

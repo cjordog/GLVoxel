@@ -7,7 +7,7 @@ X block types
 	- lighting
 	- shadows
 	- TAA
-- greedy meshing?
+X greedy meshing?
 - switch to rle?
 - compute or geo shader for voxel generation?
 X threading
@@ -35,9 +35,11 @@ X if we generate neighboring voxels one block out on each side for our current c
 - could you actually split each voxel mesh into 6 pieces based on normal during generation, and then only render the sets that face the camera?
 - we are holding a shit ton of data around for empty/full chunks. could optimize?
 - switch thread pool to using condition variables.
-- get mempool working
-- generate lod chunks while lower lods are still loaded so that we dont have any popping between generation
+V get mempool working
+X generate lod chunks while lower lods are still loaded so that we dont have any popping between generation
 - figure out how to fix seems between LODs. need to generate out more voxels than needed on higher LOD's?
 - LOD dithering? or pop buffers? probably just between first couple LODs
 - put octree stuff on a thread? doesnt even need to run every frame. just when we move. dont need results immediately even.
 - octree frustum culling
+- fix greedy meshing
+- generate skirts to fix LOD seems

@@ -155,7 +155,6 @@ private:
 
 	uint m_VBO = 0;
 	uint m_EBO = 0;
-	uint m_VAO = 0;
 
 	std::atomic<ChunkState> m_state = ChunkState::BrandNew;
 	std::atomic<uint8_t> m_neighborGeneratedMask = 0;
