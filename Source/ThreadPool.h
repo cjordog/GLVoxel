@@ -78,6 +78,15 @@ public:
 	void Submit(FunctionType t, JobPriority prio)
 	{
 		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
+		size_t workQueueSize = m_workQueue.size();
+		if (workQueueSize == 1)
+		{
+			cv.notify_one();
+		}
+		else if (workQueueSize > 1)
+		{
+			cv.notify_all();
+		}
 	}
 
 	//void Submit(std::function<void()> t, JobPriority prio)
@@ -138,6 +147,8 @@ private:
 	unsigned jobCount = 0;
 	std::unordered_map<std::thread::id, int> m_threadIDs;
 	int m_numThreads = 0;
+	std::condition_variable cv;
+	std::mutex cvMutex;
 
 	void WorkerThread(int threadID)
 	{
@@ -153,7 +164,8 @@ private:
 			}
 			else
 			{
-				std::this_thread::yield();
+				std::unique_lock lock(cvMutex);
+				cv.wait(lock, [&] {return m_workQueue.size() > 0; });
 			}
 		}
 		return;

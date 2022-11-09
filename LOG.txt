@@ -14,3 +14,4 @@ Nov 2022
 - Octree perf improvements
 - tried messing around with splitting vertex buffers by face. perf seems to be much worse when rendering all faces normally (900 -> 600 fps)
 	- and with removing backfaces perf was also worse, by maybe 25%. and theres also issues with the dot product not working on edges of screen do to projection matrix not being orthographic
+- vertex packing insane perf improvements. total memory reduction around 75%. individual vertex data 1/12 the size. framerate improvements likely do to better cache locality.

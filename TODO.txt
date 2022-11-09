@@ -46,5 +46,5 @@ X generate lod chunks while lower lods are still loaded so that we dont have any
 X one global index buffer or some other indexed render solution
 	- procedural indices generated in vertex buffer
 - can we stop generating certain features past a certain LOD level?
-- optimize vertex data
+X optimize vertex data
 - still some memory leak. test in debug with low LOD count.
