@@ -9,7 +9,8 @@ X block types
 	- TAA
 X greedy meshing?
 - switch to rle?
-- compute or geo shader for voxel generation?
+Z compute or geo shader for voxel generation?
+	- https://medium.com/@calebleak/quads-all-the-way-down-simple-voxel-rendering-fea1e4488e26
 X threading
 - use profiler for checking cache misses
 - skybox rendering
@@ -28,13 +29,13 @@ X maybe look into octrees again?
 X - world deletion for hot reloading world parameters
 - delete all gl resources on exit
 - make IMGUI_DEBUG define in cmake lists
-X - try out VerySleepy or Tracy profilers
+X try out VerySleepy or Tracy profilers
 X if we generate neighboring voxels one block out on each side for our current chunk, we can avoid the entire collecting neighbor refs phase and all the pains that come with that. could just immediately generate meshes after chunk generation too...
 - move culling to a thread. get out of render loop. sort culled chunks
 - occlusion culling
-- could you actually split each voxel mesh into 6 pieces based on normal during generation, and then only render the sets that face the camera?
-- we are holding a shit ton of data around for empty/full chunks. could optimize?
-- switch thread pool to using condition variables.
+Z could you actually split each voxel mesh into 6 pieces based on normal during generation, and then only render the sets that face the camera?
+V we are holding a shit ton of data around for empty/full chunks. could optimize?
+X switch thread pool to using condition variables.
 V get mempool working
 X generate lod chunks while lower lods are still loaded so that we dont have any popping between generation
 - figure out how to fix seems between LODs. need to generate out more voxels than needed on higher LOD's?
@@ -45,6 +46,7 @@ X generate lod chunks while lower lods are still loaded so that we dont have any
 - generate skirts to fix LOD seems
 X one global index buffer or some other indexed render solution
 	- procedural indices generated in vertex buffer
-- can we stop generating certain features past a certain LOD level?
+- can we stop generating certain terrain features like caves past a certain LOD level?
 X optimize vertex data
 - still some memory leak. test in debug with low LOD count.
+- assign priorities to chunk gen based on LOD

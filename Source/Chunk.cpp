@@ -22,7 +22,7 @@ static std::function<void(Chunk*)> s_renderListCallback;
 static const Chunk::ChunkGenParams* s_chunkGenParams = nullptr;
 
 // can solve for this inital value
-static MemPooler<Chunk::VoxelData> s_memPool(15000);
+static MemPooler<Chunk::VoxelData> s_memPool(30000);
 
 static std::vector<uint> s_chunkIndices;
 uint s_chunkEBO = 0;

@@ -28,13 +28,13 @@ static glm::vec3 s_cornerOctreeOffsets[8] =
 	{-1.0f, -1.0f, -1.0f}
 };
 
-const float CHUNK_LOD_RADIUS = 3;
+const float CHUNK_LOD_RADIUS = 4;
 Octree::Octree()
 {
 	m_centerPos = glm::vec3(0);
 	m_size = 1024;
 #ifdef DEBUG
-	const int numLODs = 3;
+	const int numLODs = 6;
 #else
 	const int numLODs = 8;
 #endif

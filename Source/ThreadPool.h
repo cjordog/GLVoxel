@@ -29,7 +29,7 @@ struct Job
 
 struct JobCmp {
 	bool operator()(const Job& lhs, const Job& rhs) const {
-		return lhs.priority > rhs.priority;
+		return lhs.priority < rhs.priority;
 	}
 };
 
