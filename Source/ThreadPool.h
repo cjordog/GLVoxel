@@ -42,7 +42,7 @@ public:
 		RenderSettings& r = RenderSettings::Get();
 		if (!r.mtEnabled)
 			return;
-		const unsigned threadCount = 8;//std::thread::hardware_concurrency();
+		const unsigned threadCount = std::thread::hardware_concurrency();
 		m_numThreads = threadCount;
 		m_working = new std::atomic_bool[threadCount];
 		try

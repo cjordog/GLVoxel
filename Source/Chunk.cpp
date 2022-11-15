@@ -279,8 +279,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - domainTurbulence - 1) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - domainTurbulence - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - domainTurbulence - m_scale) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - domainTurbulence - m_scale) / m_scale,
 		turbulentRowSize,
 		turbulentRowSize,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
@@ -289,8 +289,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// this is kinda overkill for just the dirt
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput2,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
@@ -298,9 +298,9 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	);
 	noiseGeneratorCave->get()->GenUniformGrid3D(
 		noiseOutput3,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
-		(m_chunkPos.y * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - 1) / m_scale,
+		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
+		(m_chunkPos.y * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
+		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
@@ -398,14 +398,14 @@ void Chunk::GenerateMesh()
 
 	lock.unlock();
 
-	if (RenderSettings::Get().greedyMesh)
+	//if (RenderSettings::Get().greedyMesh)
 	{
 		GenerateGreedyMeshInt();
 	}
-	else
-	{
-		GenerateMeshInt();
-	}
+	//else
+	//{
+	//	GenerateMeshInt();
+	//}
 
 	lock.lock();
 	
@@ -431,6 +431,12 @@ void Chunk::GenerateMesh()
 	auto endTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> time = endTime - startTime;
 	m_genTime += time.count();
+}
+
+void Chunk::SetNeedsLODSeam(BlockFace f)
+{
+	m_needsLODSeam = 1;
+	m_LODSeamDir = f;
 }
 
 void Chunk::SetTerrainParams(float lacunarity, float gain, int octaves)
@@ -473,6 +479,8 @@ void Chunk::GenerateMeshInt()
 						if (BlockIsOpaque(m_voxelData->m_voxels[neighborX][neighborY][neighborZ]))
 							continue;
 
+						if (m_needsLODSeam)
+							currentBlockType = BlockType::Dirt;
 						// add faces
 						for (uint j = 0; j < 4; j++)
 						{
@@ -491,8 +499,7 @@ void Chunk::GenerateMeshInt()
 	}
 }
 
-// adopted from https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/
-// TODO:: this is broken after threading updates. see normal meshing func. need to cache neighbor voxel types instead of accessing neighbors directly
+// https://0fps.net/2012/06/30/meshing-in-a-minecraft-game/
 void Chunk::GenerateGreedyMeshInt()
 {
 	// sweep over each axis, generate forward and backward facing planes in one iteration
@@ -508,17 +515,11 @@ void Chunk::GenerateGreedyMeshInt()
 		sweepDir[dim] = 1;
 
 		// mask contains values of current slices neighboring voxel information
-		uint8_t mask[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { 0 };
+		uint16_t mask[CHUNK_VOXEL_SIZE][CHUNK_VOXEL_SIZE] = { 0 };
 
 		// sweep over current dimension
 		for (x[dim] = -1; x[dim] < int(CHUNK_VOXEL_SIZE); )
 		{
-			const Chunk* neighborChunk;
-			if (x[dim] == -1)
-				neighborChunk = m_neighbors[ConvertDirToNeighborIndex(-sweepDir)];
-			else if (x[dim] == CHUNK_VOXEL_SIZE - 1)
-				neighborChunk = m_neighbors[ConvertDirToNeighborIndex(sweepDir)];
-
 			int n = 0;
 			// setup mask
 			for (x[v] = 0; x[v] < CHUNK_VOXEL_SIZE; x[v]++)
@@ -526,44 +527,14 @@ void Chunk::GenerateGreedyMeshInt()
 				for (x[u] = 0; x[u] < CHUNK_VOXEL_SIZE; x[u]++)
 				{
 					// find block type of current block and the neighbor block in the direction were searching
-					BlockType t1 = BlockType::Air;
-					BlockType t2 = BlockType::Air;
-					if (x[dim] >= 0)
-					{
-						t1 = m_voxelData->m_voxels[x[0]][x[1]][x[2]];
-					}
-					else
-					{
-						glm::i32vec3 x2(x);
-						x2[dim] += CHUNK_VOXEL_SIZE;
-						if (neighborChunk && 
-							neighborChunk->m_generated &&
-							!neighborChunk->IsEmpty())
-						{
-							t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
-						}
-					}
-					if (x[dim] < int(CHUNK_VOXEL_SIZE - 1))
-					{
-						t2 = m_voxelData->m_voxels[x[0] + sweepDir[0]][x[1] + sweepDir[1]][x[2] + sweepDir[2]];
-					}
-					else
-					{
-						glm::i32vec3 x2(x);
-						x2[dim] -= int(CHUNK_VOXEL_SIZE);
-						if (neighborChunk &&
-							neighborChunk->m_generated &&
-							!neighborChunk->IsEmpty())
-						{
-							t1 = neighborChunk->GetBlockType(x2.x, x2.y, x2.z);
-						}
-					}
+					BlockType t1 = m_voxelData->m_voxels[x[0] + 1][x[1] + 1][x[2] + 1];
+					BlockType t2 = m_voxelData->m_voxels[x[0] + sweepDir[0] + 1][x[1] + sweepDir[1] + 1][x[2] + sweepDir[2] + 1];
 
 					bool o1 = BlockIsOpaque(t1);
 					bool o2 = BlockIsOpaque(t2);
 
 					// write 0 if both opaque, 1 if we want face pointing in pos dir, 2 if neg
-					mask[x[v]][x[u]] = (o1 == o2) ? 0 : ((o1 && !o2) ? 1 : 2);
+					mask[x[v]][x[u]] = (o1 == o2) ? 0 : ((o1 && !o2) ? uint16_t(t1) * 2 : uint16_t(t2) * 2 + 1);
 				}
 			}
 
@@ -608,34 +579,48 @@ void Chunk::GenerateGreedyMeshInt()
 						glm::i32vec3 dv(0, 0, 0);
 						dv[v] = h;
 
-						glm::vec3 vertices[4] = 
+						const glm::vec3 vertices[2][4] = 
 						{
-							{x[0],					x[1],					x[2]},
-							{x[0] + du[0],			x[1] + du[1],			x[2] + du[2]},
-							{x[0] + du[0] + dv[0],	x[1] + du[1] + dv[1],	x[2] + du[2] + dv[2]},
-							{x[0] + dv[0],			x[1] + dv[1],			x[2] + dv[2]},
+							{
+								{x[0],					x[1],					x[2]},
+								{x[0] + dv[0],			x[1] + dv[1],			x[2] + dv[2]},
+								{x[0] + du[0] + dv[0],	x[1] + du[1] + dv[1],	x[2] + du[2] + dv[2]},
+								{x[0] + du[0],			x[1] + du[1],			x[2] + du[2]},
+							},
+							{
+								{x[0],					x[1],					x[2]},
+								{x[0] + du[0],			x[1] + du[1],			x[2] + du[2]},
+								{x[0] + du[0] + dv[0],	x[1] + du[1] + dv[1],	x[2] + du[2] + dv[2]},
+								{x[0] + dv[0],			x[1] + dv[1],			x[2] + dv[2]},
+							},
 						};
 
-						// faces with maskVal 1 points in positive normal, 2 is negative, so have both windings
-						static constexpr uint indices[2][6] = 
-						{
-							{
-								0, 1, 3,
-								1, 2, 3
-							},
-							{
-								0, 3, 1,
-								1, 3, 2
-							},
-						};
+						//// faces with maskVal 1 points in positive normal, 2 is negative, so have both windings
+						//static constexpr uint indices[2][6] = 
+						//{
+						//	{
+						//		0, 1, 3,
+						//		1, 2, 3
+						//	},
+						//	{
+						//		0, 3, 1,
+						//		1, 3, 2
+						//	},
+						//};
 
 						glm::vec3 normal = sweepDir;
-						if (maskVal == 2)
+						int normalDir = maskVal % 2 == 1 ? 1 : 0;
+						if (normalDir == 1)
 							normal = -normal;
 
+						BlockFace b = BlockFace(dim * 2 + (normalDir));
+						BlockType blockType = BlockType(maskVal / 2);
 						// add faces
 						for (uint m = 0; m < 4; m++)
 						{
+							glm::uvec3 localVertexPos = vertices[normalDir][m];
+							uint packedVertex = (0x3F & localVertexPos.x) | (0xFC0 & (localVertexPos.y << 6)) | (0x3F000 & (localVertexPos.z << 12)) | (0x1C0000 & (b << 18)) | (0x1FE00000 & (uint8_t(blockType) << 21));
+							m_vertices.push_back(packedVertex);
 							//m_vertices.push_back(VertexPCN{ vertices[m], sweepDir, normal });
 						}
 						for (uint m = 0; m < 6; m++)

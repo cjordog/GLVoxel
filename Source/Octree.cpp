@@ -42,6 +42,11 @@ Octree::Octree()
 	m_root = std::make_shared<OctreeNode>(nullptr, m_centerPos, m_maxDepth);
 }
 
+static int GetMaxVectorIndex(const glm::vec3& v)
+{
+	return (v.x > v.y && v.x > v.z) ? 0 : (v.y > v.z ? 1 : 2);
+}
+
 void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newChunks, std::vector<Chunk*>& leafChunks)
 {
 	ZoneScoped;
@@ -49,6 +54,7 @@ void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newCh
 	std::stack<std::shared_ptr<OctreeNode>> nodeStack;
 	int currSizeChunks = m_size;
 	std::shared_ptr<OctreeNode> currNode;
+	glm::vec3 posToChunkCenter;
 	nodeStack.push(m_root);
 	while (!nodeStack.empty())
 	{
@@ -58,10 +64,10 @@ void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newCh
 
 		// if our position is in range of this lod chunk for current lod
 		float lodDist = ((CHUNK_LOD_RADIUS + 0.5f) * currSizeChunks) * CHUNK_UNIT_SIZE;
-		if (currNode->m_lod > 0 && 
-			(abs(currNode->m_centerPos.x - position.x)) < lodDist &&
-			(abs(currNode->m_centerPos.y - position.y)) < lodDist &&
-			(abs(currNode->m_centerPos.z - position.z)) < lodDist)
+		posToChunkCenter = currNode->m_centerPos - position;
+		int maxIndex = GetMaxVectorIndex(glm::abs(posToChunkCenter));
+		float maxDistance = abs(posToChunkCenter[maxIndex]);
+		if (currNode->m_lod > 0 && maxDistance < lodDist)
 		{
 			if (currNode->m_children[0] != nullptr && HasFinishedSubtree(currNode))
 			{
@@ -91,6 +97,10 @@ void Octree::GenerateFromPosition(glm::vec3 position, std::vector<Chunk*>& newCh
 				Chunk* chunk = new Chunk(currNode->m_centerPos + chunkNodeOffset, currNode->m_lod);
 				newChunks.push_back(chunk);
 				currNode->m_chunk = chunk;
+				if (currNode->m_lod != 0 && maxDistance > lodDist && maxDistance < lodDist * (1.0f + 1.0f / CHUNK_LOD_RADIUS))
+				{
+					chunk->SetNeedsLODSeam(BlockFace(maxIndex * 2 + (posToChunkCenter[maxIndex] >= 0 ? 0 : 1)));
+				}
 			}
 			if (currNode->m_children[0] != nullptr)
 			{

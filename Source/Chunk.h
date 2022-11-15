@@ -113,6 +113,7 @@ public:
 	void GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave);
 	void GenerateVolume2();
 	void GenerateMesh();
+	void SetNeedsLODSeam(BlockFace f);
 	static void SetTerrainParams(float lacunarity, float gain, int octaves);
 
 	bool IsInFrustum(const Frustum& f) const;
@@ -161,8 +162,11 @@ private:
 	std::atomic<bool> m_generated = false;
 	std::atomic<bool> m_renderable = false;
 
+	BlockFace m_LODSeamDir = BlockFace::Right;
+
 	uint m_meshGenerated	: 1 = 0;
 	uint m_buffersGenerated : 1 = 0;
 	uint m_empty			: 1 = 1;
 	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
+	uint m_needsLODSeam		: 1 = 0;
 };
