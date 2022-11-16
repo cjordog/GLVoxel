@@ -279,8 +279,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// samples once per int, so we pass in bigger positions than our actual worldspace position...
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - domainTurbulence - m_scale) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - domainTurbulence - m_scale) / m_scale,
+		((m_chunkPos.x - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+		((m_chunkPos.z - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 		turbulentRowSize,
 		turbulentRowSize,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
@@ -289,8 +289,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	// this is kinda overkill for just the dirt
 	noiseGenerator->get()->GenUniformGrid2D(
 		noiseOutput2,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
+		((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+		((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
@@ -298,9 +298,9 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	);
 	noiseGeneratorCave->get()->GenUniformGrid3D(
 		noiseOutput3,
-		(m_chunkPos.x * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
-		(m_chunkPos.y * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
-		(m_chunkPos.z * UNIT_VOXEL_RESOLUTION - m_scale) / m_scale,
+		((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+		((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+		((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
 		INT_CHUNK_VOXEL_SIZE,
