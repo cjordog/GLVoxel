@@ -42,6 +42,8 @@ public:
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
 	void ResolveCollider(Collider& collider, float timeDelta);
+	void ResolveBoxCollider(BoxCollider& collider, float timeDelta);
+	void ResolveBoxCollider2(BoxCollider& collider, float timeDelta);
 #ifdef IMGUI_ENABLED
 	void RenderImGui();
 #endif

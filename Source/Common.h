@@ -212,31 +212,33 @@ struct BoundingVolume
 
 struct AABB : public BoundingVolume
 {
-	glm::vec3 center = glm::vec3(0);
-	glm::vec3 extents = glm::vec3(0);
+	glm::vec3 min = glm::vec3(0);
+	glm::vec3 max = glm::vec3(0);
 
 	AABB() {};
 
-	AABB(const glm::vec3& min, const glm::vec3& max)
-		: BoundingVolume{},
-		center{ (max + min) * 0.5f },
-		extents{ max.x - center.x, max.y - center.y, max.z - center.z }
+	AABB(const glm::vec3& minP, const glm::vec3& maxP)
+		: BoundingVolume{}, min(minP), max(maxP)
 	{};
 
 	AABB(const glm::vec3& inCenter, float iI, float iJ, float iK)
-		: center(inCenter), extents(iI, iJ, iK)
-	{};
+	{
+		glm::vec3 extents = glm::vec3(iI, iJ, iK) / 2.f;
+		min = inCenter - extents;
+		max = inCenter + extents;
+	};
 
 	bool IsInFrustum(const Frustum& camFrustum, const glm::mat4& transform) const override
 	{
 		//TODO:: need a function that doesnt require a transform other than a translate
 		//Get global scale thanks to our transform
-		const glm::vec3 globalCenter{ transform * glm::vec4(center, 1.f) };
+		glm::vec3 halfExtents = (max - min) / 2.0f;
+		const glm::vec3 globalCenter{ transform * glm::vec4(min + halfExtents, 1.f) };
 
 		// Scaled orientation
-		const glm::vec3 right = (glm::mat3(transform) * glm::vec3(1,0,0)) * extents.x;
-		const glm::vec3 up = (glm::mat3(transform) * glm::vec3(0,1,0)) * extents.y;
-		const glm::vec3 forward = (glm::mat3(transform) * glm::vec3(0,0,1)) * extents.z;
+		const glm::vec3 right = (glm::mat3(transform) * glm::vec3(1,0,0)) * halfExtents.x;
+		const glm::vec3 up = (glm::mat3(transform) * glm::vec3(0,1,0)) * halfExtents.y;
+		const glm::vec3 forward = (glm::mat3(transform) * glm::vec3(0,0,1)) * halfExtents.z;
 
 		const float newIi = std::abs(glm::dot(glm::vec3{ 1.f, 0.f, 0.f }, right)) +
 			std::abs(glm::dot(glm::vec3{ 1.f, 0.f, 0.f }, up)) +
@@ -263,33 +265,51 @@ struct AABB : public BoundingVolume
 
 	bool IsInFrustumTranslateOnly(const Frustum& camFrustum, const glm::vec3& translate) const override
 	{
-		const AABB globalAABB(translate + center, extents.x, extents.y, extents.z);
+		const AABB globalAABB(min + translate, max + translate);
+		glm::vec3 halfExtents = (max - min) / 2.0f;
 
-		return (globalAABB.isOnOrForwardPlan(camFrustum.leftFace) &&
-			globalAABB.isOnOrForwardPlan(camFrustum.rightFace) &&
-			globalAABB.isOnOrForwardPlan(camFrustum.topFace) &&
-			globalAABB.isOnOrForwardPlan(camFrustum.bottomFace) &&
-			globalAABB.isOnOrForwardPlan(camFrustum.nearFace) &&
-			globalAABB.isOnOrForwardPlan(camFrustum.farFace));
+		return (globalAABB.isOnOrForwardPlan(camFrustum.leftFace, halfExtents) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.rightFace, halfExtents) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.topFace, halfExtents) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.bottomFace, halfExtents) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.nearFace, halfExtents) &&
+			globalAABB.isOnOrForwardPlan(camFrustum.farFace, halfExtents));
 	}
 
 	bool IsInFrustumWorldspace(const Frustum& camFrustum) const override
 	{
-		return (isOnOrForwardPlan(camFrustum.leftFace) &&
-			isOnOrForwardPlan(camFrustum.rightFace) &&
-			isOnOrForwardPlan(camFrustum.topFace) &&
-			isOnOrForwardPlan(camFrustum.bottomFace) &&
-			isOnOrForwardPlan(camFrustum.nearFace) &&
-			isOnOrForwardPlan(camFrustum.farFace));
+		glm::vec3 halfExtents = (max - min) / 2.0f;
+		return (isOnOrForwardPlan(camFrustum.leftFace, halfExtents) &&
+			isOnOrForwardPlan(camFrustum.rightFace, halfExtents) &&
+			isOnOrForwardPlan(camFrustum.topFace, halfExtents) &&
+			isOnOrForwardPlan(camFrustum.bottomFace, halfExtents) &&
+			isOnOrForwardPlan(camFrustum.nearFace, halfExtents) &&
+			isOnOrForwardPlan(camFrustum.farFace, halfExtents));
 	}
 
 	bool isOnOrForwardPlan(const Plane& plane) const
 	{
+		glm::vec3 halfExtents = (max - min) / 2.0f;
 		// Compute the projection interval radius of b onto L(t) = b.c + t * p.n
-		const float r = extents.x * std::abs(plane.n.x) +
-			extents.y * std::abs(plane.n.y) + extents.z * std::abs(plane.n.z);
-
-		return -r <= plane.getSignedDistanceToPlan(center);
+		const float r = glm::dot(halfExtents, glm::abs(plane.n));
+		return -r <= plane.getSignedDistanceToPlan(min + halfExtents);
 	};
 
+	bool isOnOrForwardPlan(const Plane& plane, const glm::vec3& halfExtents) const
+	{
+		// Compute the projection interval radius of b onto L(t) = b.c + t * p.n
+		const float r = glm::dot(halfExtents, glm::abs(plane.n)); 
+		return -r <= plane.getSignedDistanceToPlan(min + halfExtents);
+	};
+
+	void Translate(const glm::vec3& translate)
+	{
+		min += translate;
+		max += translate;
+	}
+
+	glm::vec3 Extents()
+	{
+		return max - min;
+	}
 };

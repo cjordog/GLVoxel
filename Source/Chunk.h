@@ -25,6 +25,12 @@ public:
 		float terrainFrequency = 0.16f;
 		int terrainOctaves = 4;
 
+#ifdef DEBUG
+		bool m_debugFlatWorld = true;
+#else
+		bool m_debugFlatWorld = false;
+#endif
+
 		bool operator!=(const ChunkGenParams& rhs)
 		{
 			return caveFrequency != rhs.caveFrequency || 
@@ -32,7 +38,8 @@ public:
 				terrainLacunarity != rhs.terrainLacunarity ||
 				terrainGain != rhs.terrainGain ||
 				terrainFrequency != rhs.terrainFrequency ||
-				terrainOctaves != rhs.terrainOctaves;
+				terrainOctaves != rhs.terrainOctaves ||
+				m_debugFlatWorld != rhs.m_debugFlatWorld;
 		}
 	};
 
@@ -97,6 +104,7 @@ public:
 
 	BlockType GetBlockType(uint x, uint y, uint z) const;
 	bool VoxelIsCollideable(const glm::i32vec3& index) const;
+	bool VoxelIsCollideableAtWorldPos(const glm::vec3& worldPos) const;
 	ChunkState GetChunkState() const;
 	bool GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex);
 	bool ReadyForMeshGeneration() const;

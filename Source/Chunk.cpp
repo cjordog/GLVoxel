@@ -166,6 +166,8 @@ Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 
 bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
 {
+	if (m_empty)
+		return false;
 	const glm::i32vec3 intIndex = index + glm::i32vec3(1);
 	switch (m_voxelData->m_voxels[intIndex.x][intIndex.y][intIndex.z])
 	{
@@ -176,6 +178,13 @@ bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
 	default:
 		return false;
 	}
+}
+
+bool Chunk::VoxelIsCollideableAtWorldPos(const glm::vec3& worldPos) const
+{
+	if (m_empty)
+		return false;
+	return VoxelIsCollideable((worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION) / m_scale);
 }
 
 Chunk::ChunkState Chunk::GetChunkState() const
@@ -265,7 +274,6 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	auto startTime = std::chrono::high_resolution_clock::now();
 
 	m_voxelData = s_memPool.New();
-
 	const float TERRAIN_HEIGHT = s_chunkGenParams->terrainHeight;
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
@@ -276,37 +284,40 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
 	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 	float* noiseOutput3 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
-	// samples once per int, so we pass in bigger positions than our actual worldspace position...
-	noiseGenerator->get()->GenUniformGrid2D(
-		noiseOutput,
-		((m_chunkPos.x - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		((m_chunkPos.z - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		turbulentRowSize,
-		turbulentRowSize,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
-		1
-	);
-	// this is kinda overkill for just the dirt
-	noiseGenerator->get()->GenUniformGrid2D(
-		noiseOutput2,
-		((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		INT_CHUNK_VOXEL_SIZE,
-		INT_CHUNK_VOXEL_SIZE,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
-		1337
-	);
-	noiseGeneratorCave->get()->GenUniformGrid3D(
-		noiseOutput3,
-		((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-		INT_CHUNK_VOXEL_SIZE,
-		INT_CHUNK_VOXEL_SIZE,
-		INT_CHUNK_VOXEL_SIZE,
-		FREQUENCY / UNIT_VOXEL_RESOLUTION * s_chunkGenParams->caveFrequency * m_scale,
-		1337
-	);
+	if (!s_chunkGenParams->m_debugFlatWorld)
+	{
+		// samples once per int, so we pass in bigger positions than our actual worldspace position...
+		noiseGenerator->get()->GenUniformGrid2D(
+			noiseOutput,
+			((m_chunkPos.x - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.z - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			turbulentRowSize,
+			turbulentRowSize,
+			FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
+			1
+		);
+		// this is kinda overkill for just the dirt
+		noiseGenerator->get()->GenUniformGrid2D(
+			noiseOutput2,
+			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
+			1337
+		);
+		noiseGeneratorCave->get()->GenUniformGrid3D(
+			noiseOutput3,
+			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			FREQUENCY / UNIT_VOXEL_RESOLUTION * s_chunkGenParams->caveFrequency * m_scale,
+			1337
+		);
+	}
 
 	bool emptyVal = 1;
 	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
@@ -322,10 +333,22 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 				float noiseVal3D = 0;
 				int indexOffset = turbulentRowSize * domainTurbulence + domainTurbulence;
 				int index = int(x + noiseVal3D * domainTurbulence) + int(z + noiseVal3D * domainTurbulence) * turbulentRowSize + indexOffset;
-				float worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
 
-				float noiseVal2 = noiseOutput2[x + INT_CHUNK_VOXEL_SIZE * z];
-				float dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
+				float worldSpaceNoiseVal, noiseVal2, noiseVal3, dirtHeight;
+				if (!s_chunkGenParams->m_debugFlatWorld)
+				{
+					worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
+					noiseVal2 = noiseOutput2[x + INT_CHUNK_VOXEL_SIZE * z];
+					noiseVal3 = noiseOutput3[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
+				}
+				else
+				{
+					worldSpaceNoiseVal = 0;
+					noiseVal2 = 0;
+					noiseVal3 = 0;
+					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
+				}
 
 				if (worldSpaceHeight > worldSpaceNoiseVal)
 				{
@@ -333,7 +356,7 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 				}
 				else
 				{
-					if (noiseOutput3[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z] > 0.8f)
+					if (noiseVal3 > 0.8f)
 					{
 						m_voxelData->m_voxels[x][y][z] = BlockType::Air;
 					}
@@ -545,7 +568,6 @@ void Chunk::GenerateGreedyMeshInt()
 			{
 				for (int j = 0; j < CHUNK_VOXEL_SIZE; )
 				{
-					//TODO:: check block type (maybe incorporate into mask)
 					if (int maskVal = mask[i][j])
 					{
 						// find largest rect of same maskVal

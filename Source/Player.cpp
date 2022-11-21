@@ -13,7 +13,7 @@ Player::Player(const glm::vec3& position)
 
 void Player::UpdatePosition(float deltaTime, InputData* inputData)
 {
-	if (inputData->m_moveInput != glm::vec3(0))
+	//if (inputData->m_moveInput != glm::vec3(0))
 	{
 		glm::vec3 forward = m_camera.GetForward();
 		if (m_freeCam)
@@ -24,7 +24,13 @@ void Player::UpdatePosition(float deltaTime, InputData* inputData)
 		{
 			forward.y = 0;
 			forward = glm::normalize(forward);
-			m_collider.TranslateAndResolve((forward * -inputData->m_moveInput.z + m_camera.GetRight() * inputData->m_moveInput.x) * deltaTime / 1000.0f * m_speed);
+			glm::vec3 vel = (forward * -inputData->m_moveInput.z + m_camera.GetRight() * inputData->m_moveInput.x) * /*deltaTime / 1000.0f **/ m_speed;
+			m_collider.SetVelocityX(vel.x);
+			m_collider.SetVelocityZ(vel.z);
+			if (inputData->m_moveInput.y)
+			{
+				m_collider.SetVelocityY(50);
+			}
 		}
 	}
 }

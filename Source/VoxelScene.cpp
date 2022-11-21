@@ -247,6 +247,362 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	}
 }
 
+static int TestAABBAABB(AABB a, AABB b)
+{
+	// Exit with no intersection if separated along an axis
+	if (a.max[0] < b.min[0] || a.min[0] > b.max[0]) return 0;
+	if (a.max[1] < b.min[1] || a.min[1] > b.max[1]) return 0;
+	if (a.max[2] < b.min[2] || a.min[2] > b.max[2]) return 0;
+	// Overlapping on all axes means AABBs are intersecting
+	return 1; 
+}
+
+// Intersect AABBs ‘a’ and ‘b’ moving with constant velocities va and vb.
+// On intersection, return time of first and last contact in tfirst and tlast
+static int IntersectMovingAABBAABB(
+	const AABB& a, 
+	const AABB& b, 
+	const glm::vec3& va, 
+	const glm::vec3& vb, 
+	uint8_t slideMaskB,
+	float& tfirst,
+	float& tlast,
+	int& intersectionAxis
+)
+{
+	// Exit early if ‘a’ and ‘b’ initially overlapping
+	if (TestAABBAABB(a, b)) {
+		tfirst = tlast = 0.0f;
+		fprintf(stderr, "overlapping\n");
+		return 1;
+	}
+
+	// Use relative velocity; effectively treating ’a’ as stationary
+	glm::vec3 v = vb - va;
+
+	// Initialize times of first and last contact
+	tfirst = 0.0f;
+	tlast = 1.0f;
+
+	// For each axis, determine times of first and last contact, if any
+	for (int i = 0; i < 3; i++) {
+		if (v[i] < 0.0f) {
+			if (b.max[i] < a.min[i]) return 0; // Nonintersecting and moving apart
+			if (a.max[i] < b.min[i]) tfirst = glm::max((a.max[i] - b.min[i]) / v[i], tfirst);
+			if (b.max[i] > a.min[i]) tlast = glm::min((a.min[i] - b.max[i]) / v[i], tlast);
+		}
+		if (v[i] > 0.0f) {
+			if (b.min[i] > a.max[i]) return 0; // Nonintersecting and moving apart
+			if (b.max[i] < a.min[i]) tfirst = glm::max((a.min[i] - b.max[i]) / v[i], tfirst);
+			if (a.max[i] > b.min[i]) tlast = glm::min((a.max[i] - b.min[i]) / v[i], tlast);
+		}
+		// No overlap possible if time of first contact occurs after time of last contact
+		if (tfirst > tlast) return 0;
+	}
+	return 1;
+}
+
+// Intersect AABBs ‘a’ and ‘b’ moving with constant velocities va and vb.
+// On intersection, return time of first and last contact in tfirst and tlast
+static int IntersectMovingAABBAABBAxis(
+	const AABB& a,
+	const AABB& b,
+	const glm::vec3& va,
+	const glm::vec3& vb,
+	uint8_t slideMaskB,
+	float& tfirst,
+	float& tlast,
+	int& i
+)
+{
+	// Exit early if ‘a’ and ‘b’ initially overlapping
+	if (TestAABBAABB(a, b)) {
+		tfirst = tlast = 0.0f;
+		fprintf(stderr, "overlapping\n");
+		return 1;
+	}
+
+	// Use relative velocity; effectively treating ’a’ as stationary
+	glm::vec3 v = vb - va;
+
+	// Initialize times of first and last contact
+	tfirst = 0.0f;
+	tlast = 1.0f;
+	int i2 = (i + 1) % 3;
+	int i3 = (i + 2) % 3;
+
+	if (a.max[i2] < b.min[i2] || a.min[i2] > b.max[i2]) return 0;
+	if (a.max[i3] < b.min[i3] || a.min[i3] > b.max[i3]) return 0;
+
+	// For each axis, determine times of first and last contact, if any
+	if (v[i] < 0.0f) {
+		if (b.max[i] < a.min[i]) return 0; // Nonintersecting and moving apart
+		if (a.max[i] < b.min[i]) tfirst = glm::max((a.max[i] - b.min[i]) / v[i], tfirst);
+		if (b.max[i] > a.min[i]) tlast = glm::min((a.min[i] - b.max[i]) / v[i], tlast);
+	}
+	if (v[i] > 0.0f) {
+		if (b.min[i] > a.max[i]) return 0; // Nonintersecting and moving apart
+		if (b.max[i] < a.min[i]) tfirst = glm::max((a.min[i] - b.max[i]) / v[i], tfirst);
+		if (a.max[i] > b.min[i]) tlast = glm::min((a.max[i] - b.min[i]) / v[i], tlast);
+	}
+	// No overlap possible if time of first contact occurs after time of last contact
+	if (tfirst > tlast) return 0;
+	return 1;
+}
+
+void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
+{
+	const AABB& aabb = collider.GetAABB();
+	//const glm::vec3 extents = aabb.max - aabb.min;
+
+	glm::vec3 velocity = collider.GetVelocity();
+	if (!collider.GetSlideMask(BlockFace::Bottom))
+	{
+		velocity = velocity + glm::vec3(0, -100, 0) * (timeDelta / 1000.f);
+		collider.SetVelocity(velocity);
+	}
+	glm::vec3 targetDir = velocity * (timeDelta / 1000.f);
+	for (int i = 0; i < 3; i++)
+	{
+		if (targetDir[i] == 0.0f)
+		{
+			continue;
+		}
+		int index = i * 2 + (targetDir[i] > 0.0f ? 0 : 1);
+		int otherIndex = i * 2 + (targetDir[i] > 0.0f ? 1 : 0);
+		if (collider.GetSlideMask(index))
+		{
+			targetDir[i] = 0;
+		}
+		collider.ClearSlideMask(otherIndex);
+	}
+
+	AABB translatedAABB = aabb;
+	translatedAABB.Translate(targetDir);
+
+	glm::i32vec3 voxelSpaceNewMin = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceStartMin = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceNewMax = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceStartMax = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+
+	// need to also check max
+	if (voxelSpaceNewMin == voxelSpaceStartMin )
+	{
+		collider.Translate(targetDir);
+		return;
+	}
+
+	AABB combinedAABB = AABB(glm::min(aabb.min, translatedAABB.min), glm::max(aabb.max, translatedAABB.max));
+	glm::i32vec3 voxelSpaceExtents = glm::ceil(combinedAABB.Extents() * float(UNIT_VOXEL_RESOLUTION) + glm::vec3(1));
+
+	bool* localBlocks = new bool[voxelSpaceExtents.x * voxelSpaceExtents.y * voxelSpaceExtents.z];
+
+	// TODO:: lots of optimizations possible here. not re-grabbing chunks every iteration. better prioritization of AABB checking in second loop
+	// should check AABB's closest in direction of movement first. combining neighboring AABBs to do less checks. 
+	// can think of combining AABBs as max of 3 planes around AABB. start will always be in a corner and will always be empty. so combine those ones in planes around start on each axis
+	glm::vec3 offset = { 0,0,0 };
+	glm::vec3 currentPos;
+	int index = 0;
+	for (int i = 0; i < voxelSpaceExtents.x; i++)
+	{
+		offset.x = i;
+		for (int j = 0; j < voxelSpaceExtents.y; j++)
+		{
+			offset.y = j;
+			for (int k = 0; k < voxelSpaceExtents.z; k++)
+			{
+				offset.z = k;
+				currentPos = combinedAABB.min + offset * VOXEL_UNIT_SIZE;
+				// need to solve edge case if outside the octree
+				Chunk* currChunk = m_octree.GetChunkAtWorldPos(currentPos);
+				if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
+					return;
+
+				localBlocks[index++] = currChunk->VoxelIsCollideableAtWorldPos(currentPos);
+			}
+		}
+	}
+
+	index = 0;
+	AABB voxelAABB;
+	glm::vec3 roundedMin = glm::vec3(glm::i32vec3(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION))) * VOXEL_UNIT_SIZE;
+	glm::vec3 voxelAABBMin;
+	float tFirst = 0, tLast = 0;
+	bool collided = false;
+	int intersectionAxis;
+	for (int i = 0; i < voxelSpaceExtents.x; i++)
+	{
+		if (collided) break;
+		offset.x = i;
+		for (int j = 0; j < voxelSpaceExtents.y; j++)
+		{
+			if (collided) break;
+			offset.y = j;
+			for (int k = 0; k < voxelSpaceExtents.z; k++)
+			{
+				offset.z = k;
+				if (localBlocks[index++])
+				{
+					voxelAABBMin = roundedMin + offset * VOXEL_UNIT_SIZE;
+					voxelAABB = { voxelAABBMin, voxelAABBMin + glm::vec3(VOXEL_UNIT_SIZE) };
+					// this is potentially problematic. if theres two AABBs in our path, and were going fast enough to collide with both of them. then only one will get collided with. and it could be the further one.
+					// need to sort by distance or something. combining would help a bit.
+					if (IntersectMovingAABBAABB(voxelAABB, aabb, glm::vec3(0), targetDir, 0, tFirst, tLast, intersectionAxis) != 0)
+					{
+						collided = true;
+						break;
+					}
+				}
+			}
+		}
+	}
+
+	if (collided)
+	{
+		collider.Translate(targetDir * glm::min(tFirst, 1.0f) * 0.999f);
+		collider.SetVelocityIndex(intersectionAxis, 0);
+		collider.SetSlideMask(intersectionAxis);
+	}
+	else
+	{
+		collider.Translate(targetDir);
+	}
+
+	delete [] localBlocks;
+}
+
+void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
+{
+	const AABB& aabb = collider.GetAABB();
+	//const glm::vec3 extents = aabb.max - aabb.min;
+
+	glm::vec3 velocity = collider.GetVelocity();
+	//if (!collider.GetSlideMask(BlockFace::Bottom))
+	{
+		velocity = velocity + glm::vec3(0, -75, 0) * (timeDelta / 1000.f);
+		collider.SetVelocity(velocity);
+	}
+	glm::vec3 targetDir = velocity * (timeDelta / 1000.f);
+	//for (int i = 0; i < 3; i++)
+	//{
+	//	if (targetDir[i] == 0.0f)
+	//	{
+	//		continue;
+	//	}
+	//	int index = i * 2 + (targetDir[i] > 0.0f ? 0 : 1);
+	//	int otherIndex = i * 2 + (targetDir[i] > 0.0f ? 1 : 0);
+	//	if (collider.GetSlideMask(index))
+	//	{
+	//		targetDir[i] = 0;
+	//	}
+	//	collider.ClearSlideMask(otherIndex);
+	//}
+
+	AABB translatedAABB = aabb;
+	translatedAABB.Translate(targetDir);
+
+	glm::i32vec3 voxelSpaceNewMin = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceStartMin = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceNewMax = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
+	glm::i32vec3 voxelSpaceStartMax = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+
+	// need to also check max
+	if (voxelSpaceNewMin == voxelSpaceStartMin)
+	{
+		collider.Translate(targetDir);
+		return;
+	}
+
+	AABB combinedAABB = AABB(glm::min(aabb.min, translatedAABB.min), glm::max(aabb.max, translatedAABB.max));
+	glm::i32vec3 voxelSpaceExtents = glm::ceil(combinedAABB.Extents() * float(UNIT_VOXEL_RESOLUTION) + glm::vec3(1));
+
+	bool* localBlocks = new bool[voxelSpaceExtents.x * voxelSpaceExtents.y * voxelSpaceExtents.z];
+
+	// TODO:: lots of optimizations possible here. not re-grabbing chunks every iteration. better prioritization of AABB checking in second loop
+	// should check AABB's closest in direction of movement first. combining neighboring AABBs to do less checks. 
+	// can think of combining AABBs as max of 3 planes around AABB. start will always be in a corner and will always be empty. so combine those ones in planes around start on each axis
+	glm::vec3 offset = { 0,0,0 };
+	glm::vec3 currentPos;
+	int index = 0;
+	for (int i = 0; i < voxelSpaceExtents.x; i++)
+	{
+		offset.x = i;
+		for (int j = 0; j < voxelSpaceExtents.y; j++)
+		{
+			offset.y = j;
+			for (int k = 0; k < voxelSpaceExtents.z; k++)
+			{
+				offset.z = k;
+				currentPos = combinedAABB.min + offset * VOXEL_UNIT_SIZE;
+				// need to solve edge case if outside the octree
+				Chunk* currChunk = m_octree.GetChunkAtWorldPos(currentPos);
+				if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
+					return;
+
+				localBlocks[index++] = currChunk->VoxelIsCollideableAtWorldPos(currentPos);
+			}
+		}
+	}
+
+	index = 0;
+	AABB voxelAABB;
+	glm::vec3 roundedMin = glm::vec3(glm::i32vec3(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION))) * VOXEL_UNIT_SIZE;
+	glm::vec3 voxelAABBMin;
+	float tFirst[3] = { 0 }, tLast[3] = { 0 };
+	bool collided[3] = { false };
+	int intersectionAxis;
+	for (int i = 0; i < voxelSpaceExtents.x; i++)
+	{
+		offset.x = i;
+		for (int j = 0; j < voxelSpaceExtents.y; j++)
+		{
+			offset.y = j;
+			for (int k = 0; k < voxelSpaceExtents.z; k++)
+			{
+				offset.z = k;
+				if (localBlocks[index++])
+				{
+					voxelAABBMin = roundedMin + offset * VOXEL_UNIT_SIZE;
+					voxelAABB = { voxelAABBMin, voxelAABBMin + glm::vec3(VOXEL_UNIT_SIZE) };
+					for (int a = 0; a < 3; a++)
+					{
+						if (collided[a] || targetDir[a] == 0.0f)
+							continue;
+						glm::vec3 targetDirElement = glm::vec3(0);
+						targetDirElement[a] = targetDir[a];
+						//voxelAABB.Translate(glm::normalize(targetDirElement * 0.001f));
+						// this is potentially problematic. if theres two AABBs in our path, and were going fast enough to collide with both of them. then only one will get collided with. and it could be the further one.
+						// need to sort by distance or something. combining would help a bit.
+						if (IntersectMovingAABBAABBAxis(voxelAABB, aabb, glm::vec3(0), targetDirElement, 0, tFirst[a], tLast[a], a) != 0)
+						{
+							collided[a] = true;
+						}
+					}
+				}
+			}
+		}
+	}
+
+	for (int a = 0; a < 3; a++)
+	{
+		glm::vec3 targetDirElement = glm::vec3(0);
+		targetDirElement[a] = targetDir[a];
+		if (collided[a])
+		{
+			//collider.Translate(targetDirElement * glm::min(tFirst[a], 1.0f) * 0.999f);
+			collider.SetVelocityIndex(a, 0);
+			//collider.SetSlideMask(intersectionAxis);
+		}
+		else
+		{
+			collider.Translate(targetDirElement);
+		}
+	}
+	fprintf(stderr, "Colliding on %d, %d, %d\n", collided[0], collided[1], collided[2]);
+
+	delete[] localBlocks;
+}
+
 // since velocity * frameDelta buffers are so small, could we not just look if vector goes into new block. 
 // if it does, check that block. resolve vectors easily. small edge cases when crossing multiple borders. could then fallback to amanatides and woo 
 // but that would almost never happen with these vector sizes? maybe lower framerates it could
@@ -356,13 +712,13 @@ void VoxelScene::ResolveCollider(Collider& collider, float timeDelta)
 
 void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)
 {
-	glm::vec3 center = aabb.center;
+	glm::vec3 extents = aabb.max - aabb.min;
 	for (uint i = 0; i < BlockFace::NumFaces; i++)
 	{
 		for (uint j = 0; j < 4; j++)
 		{
 			// extents are half extents...
-			m_aabbVerts.push_back(VertexP{(s_centeredFaces[i][j] * aabb.extents + center)});
+			m_aabbVerts.push_back(VertexP{(s_centeredFaces[i][j] * extents + aabb.min)});
 		}
 		for (uint j = 0; j < 6; j++)
 		{
@@ -428,6 +784,7 @@ void VoxelScene::RenderImGui()
 	ImGui::SliderFloat("Terrain Gain", &m_chunkGenParamsNext.terrainGain, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 	ImGui::SliderFloat("Terrain Frequency", &m_chunkGenParamsNext.terrainFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 	ImGui::InputInt("Terrain Octaves", &m_chunkGenParamsNext.terrainOctaves, 1, 10);
+	ImGui::Checkbox("Debug Terrain", &m_chunkGenParamsNext.m_debugFlatWorld);
 }
 #endif
 

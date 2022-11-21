@@ -77,7 +77,7 @@ void World::Update(float updateTime, InputData* inputData)
 	//m_speed += inputData->m_mouseWheel.y * 2.0f;
 	//UpdateCamera(updateTime, inputData);
 	m_player.UpdatePosition(updateTime, inputData);
-	//UpdatePhysics(updateTime);
+	UpdatePhysics(updateTime);
 	m_player.UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_player.GetCamera().GetPosition());
 
@@ -163,7 +163,7 @@ void World::UpdatePhysics(float timeDelta)
 {
 	if (!m_player.GetFreeCam()) 
 	{
-		//m_voxelScene.ResolveCollider(m_player.GetBoxCollider(), timeDelta);
+		m_voxelScene.ResolveBoxCollider2(m_player.GetBoxCollider(), timeDelta);
 	}
 }
 
@@ -184,6 +184,9 @@ void World::ImGuiRenderStart()
 	glm::vec3 cameraPos = m_player.GetBoxCollider().GetPosition();
 	ImGui::Text("Position x:%.2f y:%.4f z:%.2f", cameraPos.x, cameraPos.y, cameraPos.z);
 	ImGui::Checkbox("Freeze Camera", &m_freezeCamera);
+	bool freeCam = m_player.GetFreeCam();
+	ImGui::Checkbox("Free Cam", &freeCam);
+	m_player.SetFreeCam(freeCam);
 }
 
 void World::ImGuiRenderEnd()

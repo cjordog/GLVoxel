@@ -34,7 +34,7 @@ Octree::Octree()
 	m_centerPos = glm::vec3(0);
 	m_size = 1024;
 #ifdef DEBUG
-	const int numLODs = 6;
+	const int numLODs = 3;
 #else
 	const int numLODs = 8;
 #endif

@@ -27,7 +27,8 @@ vec3 ApplyFog( in vec3  rgb,      // original color of the pixel
     vec3  fogColor  = mix( vec3(0.5,0.6,0.7), // bluish
                            vec3(1.0,0.9,0.7), // yellowish
                            pow(sunAmount,8.0) );
-    float fogAmount = max(heightFogAmount, distanceFogAmount);
+    float fogAmount = max(0.0f, distanceFogAmount);
+//    float fogAmount = max(heightFogAmount, distanceFogAmount);
     return mix( rgb, fogColor, fogAmount );
 }
 
