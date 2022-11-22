@@ -178,11 +178,6 @@ void VoxelScene::Update(const glm::vec3& position)
 				break;
 		}
 	}
-
-	//if (RenderSettings::Get().renderDebugWireframes)
-	//{
-	//	GatherBoundingBoxes();
-	//}
 }
 
 void VoxelScene::ResetVoxelScene()
@@ -697,11 +692,20 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 			exitedChunk = false;
 		}
 	}
-	hitPos = currChunk->GetChunkPos() + (glm::vec3(voxelIndex) + glm::vec3(0.5f)) * VOXEL_UNIT_SIZE;
+	hitPos = currChunk->GetChunkPos() + (glm::vec3(voxelIndex)/* + glm::vec3(0.5f)*/) * VOXEL_UNIT_SIZE;
 	//if (collided)
 	//	fprintf(stderr, "hit block type %d\n", uint8_t(currChunk->GetBlockType(voxelIndex.x, voxelIndex.y, voxelIndex.z)));
 	if (collided)
-		voxelRayHit = { voxelIndex, currChunk, ray.origin + ray.dir * lastT };
+	{
+		voxelRayHit = 
+		{
+			voxelIndex,
+			currChunk,
+			ray.origin + ray.dir * lastT,
+			glm::vec3(0),
+			currChunk->GetChunkPos() + (glm::vec3(voxelIndex)/* + glm::vec3(0.5f)*/) * VOXEL_UNIT_SIZE * currChunk->GetScale()
+		};
+	}
 
 	return collided;
 }
@@ -713,6 +717,31 @@ bool VoxelScene::DeleteBlock(const Ray& ray)
 	{
 		hit.chunk->DeleteBlockAtIndex(hit.voxelIndex);
 		hit.chunk->GenerateMesh();
+
+		for (int i = 0; i < 3; i++)
+		{
+			glm::vec3 dir = glm::vec3(0);
+			dir[i] = 1;
+
+			if (hit.voxelIndex[i] >= CHUNK_VOXEL_SIZE - 1)
+			{
+				Chunk* neighborChunk = m_octree.GetChunkAtWorldPos(hit.voxelHitPosition + dir * float(1u << hit.chunk->GetLOD()) * 1.5f);
+				glm::i8vec3 neighborIndex = hit.voxelIndex;
+				neighborIndex += glm::i8vec3(1);
+				neighborIndex[i] = 0;
+				neighborChunk->DeleteBlockAtInternalIndex(neighborIndex);
+				neighborChunk->GenerateMesh();
+			}
+			else if (hit.voxelIndex[i] <= 0)
+			{
+				Chunk* neighborChunk = m_octree.GetChunkAtWorldPos(hit.voxelHitPosition - dir * float(1u << hit.chunk->GetLOD()) * .5f);
+				glm::i8vec3 neighborIndex = hit.voxelIndex;
+				neighborIndex += glm::i8vec3(1);
+				neighborIndex[i] = Chunk::INT_CHUNK_VOXEL_SIZE - 1;
+				neighborChunk->DeleteBlockAtInternalIndex(neighborIndex);
+				neighborChunk->GenerateMesh();
+			}
+		}
 	}
 	return true;
 }
@@ -754,7 +783,13 @@ void VoxelScene::RenderHitPos(const Camera* camera, const Camera* debugCullCamer
 
 	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
 
-	glm::mat4x4 modelMat = glm::scale(glm::translate(glm::mat4(1.0f), hitPos), glm::vec3(float(1.0f / CHUNK_UNIT_SIZE)));
+	glm::mat4x4 modelMat = glm::mat4(1.0f);
+	modelMat = glm::translate(modelMat, hitPos);
+	modelMat = glm::scale(modelMat, glm::vec3(VOXEL_UNIT_SIZE));
+	modelMat = glm::translate(modelMat, glm::vec3(0.5f));
+	modelMat = glm::scale(modelMat, glm::vec3(1.01f));
+	modelMat = glm::translate(modelMat, glm::vec3(-0.5f));
+	modelMat = glm::scale(modelMat, glm::vec3(float(0.5f / CHUNK_UNIT_SIZE)));
 
 	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 

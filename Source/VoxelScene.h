@@ -34,6 +34,8 @@ public:
 		glm::i8vec3 voxelIndex;
 		Chunk* chunk;
 		glm::vec3 hitPosition;
+		glm::vec3 hitNormal;
+		glm::vec3 voxelHitPosition;
 	};
 
 	VoxelScene();

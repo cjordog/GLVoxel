@@ -84,6 +84,8 @@ void World::Update(float updateTime, InputData* inputData)
 	{
 		m_voxelScene.DeleteBlock({ m_player.GetCamera().GetPosition(), m_player.GetCamera().GetForward() });
 	}
+	VoxelScene::VoxelRayHit hit;
+	m_voxelScene.RayCast({ m_player.GetCamera().GetPosition(), m_player.GetCamera().GetForward()}, hit);
 
 	CalcFrameRate(updateTime);
 }

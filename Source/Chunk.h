@@ -98,6 +98,7 @@ public:
 	uint GetIndexCount() { return m_indexCount; }
 	const AABB& GetBoundingBox() const { return m_AABB; }
 	const uint GetLOD() const { return m_LOD; }
+	const float GetScale() const { return m_scale; }
 	bool IsDeletable() const { return m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers; }
 	bool IsDone() const { return m_state == ChunkState::Done; }
 	glm::vec3 GetChunkPos() { return m_chunkPos; }
@@ -111,6 +112,7 @@ public:
 	bool ReadyForMeshGeneration() const;
 
 	void DeleteBlockAtIndex(const glm::i8vec3& index);
+	void DeleteBlockAtInternalIndex(const glm::i8vec3& index);
 	void ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b);
 
 	bool IsEmpty() const { return bool(m_empty); }

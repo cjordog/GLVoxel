@@ -195,7 +195,6 @@ Chunk::ChunkState Chunk::GetChunkState() const
 bool Chunk::GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex)
 {
 	voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
-	voxelIndex += glm::i32vec3(1);
 	return true;
 }
 
@@ -214,6 +213,11 @@ bool Chunk::ReadyForMeshGeneration() const
 void Chunk::DeleteBlockAtIndex(const glm::i8vec3& index)
 {
 	m_voxelData->m_voxels[index.x + 1][index.y + 1][index.z + 1] = BlockType::Air;
+}
+
+void Chunk::DeleteBlockAtInternalIndex(const glm::i8vec3& index)
+{
+	m_voxelData->m_voxels[index.x][index.y][index.z] = BlockType::Air;
 }
 
 void Chunk::ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b)
@@ -432,7 +436,8 @@ void Chunk::GenerateMesh()
 	m_indexCount = 0;
 
 	m_vertices.clear();
-	//m_indices.clear();
+	m_meshGenerated = 0;
+	m_noGeo = 0;
 
 	lock.unlock();
 
