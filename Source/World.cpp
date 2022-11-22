@@ -1,6 +1,7 @@
 #include <fstream>
 #include <sstream>
 #include <iostream>
+#include <vector>
 #include <glad/glad.h>
 #include "World.h"
 
@@ -30,7 +31,17 @@ World::World()
 	m_player(glm::vec3(0, 100, 0))
 {
 	m_flags |= WorldFlags::EnableMT;
-	//m_player.m_collisionCallback = std::bind(&VoxelScene::ResolveCollider, m_voxelScene, std::placeholders::_1, std::placeholders::_2);
+	std::vector<std::string> faces =
+	{
+		"../Assets/Textures/right.jpg",
+		"../Assets/Textures/left.jpg",
+		"../Assets/Textures/top.jpg",
+		"../Assets/Textures/bottom.jpg",
+		"../Assets/Textures/front.jpg",
+		"../Assets/Textures/back.jpg"
+	};
+	uint skyboxTextureID = LoadCubemap(faces);
+	m_skybox.SetTextureID(skyboxTextureID);
 }
 
 bool World::Init()
@@ -48,6 +59,7 @@ bool World::InitShared()
 {
 	shaderProgram1 = ShaderProgram("test1.vs.glsl", "test1.fs.glsl");
 	VoxelScene::InitShared();
+	Skybox::InitShared();
 	return true;
 }
 
@@ -61,8 +73,8 @@ void World::Render()
 #ifdef IMGUI_ENABLED
 	ImGuiBeginRender();
 #endif
-
 	m_voxelScene.Render(&m_player.GetCamera(), &m_player.GetCamera());
+	m_skybox.Render(m_player.GetCamera());
 
 #ifdef IMGUI_ENABLED
 	ImGuiRenderStart();
@@ -74,8 +86,6 @@ void World::Render()
 void World::Update(float updateTime, InputData* inputData)
 {
 	ZoneScoped;
-	//m_speed += inputData->m_mouseWheel.y * 2.0f;
-	//UpdateCamera(updateTime, inputData);
 	m_player.UpdatePosition(updateTime, inputData);
 	UpdatePhysics(updateTime);
 	m_player.UpdateCamera(updateTime, inputData);
@@ -132,6 +142,38 @@ uint World::LoadTexture(const char* image, ImageFormat fmt)
 	return texture;
 }
 
+uint World::LoadCubemap(const std::vector<std::string>& faces)
+{
+	unsigned int textureID;
+	glGenTextures(1, &textureID);
+	glBindTexture(GL_TEXTURE_CUBE_MAP, textureID);
+
+	int width, height, nrChannels;
+	for (unsigned int i = 0; i < faces.size(); i++)
+	{
+		unsigned char* data = stbi_load(faces[i].c_str(), &width, &height, &nrChannels, 0);
+		if (data)
+		{
+			glTexImage2D(GL_TEXTURE_CUBE_MAP_POSITIVE_X + i,
+				0, GL_RGB, width, height, 0, GL_RGB, GL_UNSIGNED_BYTE, data
+			);
+			stbi_image_free(data);
+		}
+		else
+		{
+			std::cout << "Cubemap tex failed to load at path: " << faces[i] << std::endl;
+			stbi_image_free(data);
+		}
+	}
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+	glTexParameteri(GL_TEXTURE_CUBE_MAP, GL_TEXTURE_WRAP_R, GL_CLAMP_TO_EDGE);
+
+	return textureID;
+}
+
 constexpr float FRAMERATE_MS = 1000.0f;
 uint World::CalcFrameRate(float frameTime)
 {
@@ -147,23 +189,6 @@ uint World::CalcFrameRate(float frameTime)
 	m_frameRate = uint(m_frameTimes.size() / FRAMERATE_MS * 1000.f);
 	return m_frameRate;
 }
-
-//void World::UpdateCamera(float updateTime, InputData* inputData)
-//{
-//	m_camera.FrameStart();
-//	if (!inputData->m_disableMouseLook)
-//	{
-//		// TODO:: camera should probably be transformed right before render and elapsed time calculated then, so long frames dont cause jumps on the next frame
-//		m_camera.Transform(inputData->m_moveInput * m_speed * (updateTime / 1000.0f), -inputData->m_mouseInput.y * 0.5f, inputData->m_mouseInput.x * 0.5f);
-//	}
-//
-//	m_camera.CalculateFrustum();
-//
-//	if (!m_freezeCamera)
-//	{
-//		m_frozenCamera = m_camera;
-//	}
-//}
 
 void World::UpdatePhysics(float timeDelta)
 {

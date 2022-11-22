@@ -50,3 +50,4 @@ X one global index buffer or some other indexed render solution
 X optimize vertex data
 - still some memory leak. test in debug with low LOD count.
 - assign priorities to chunk gen based on LOD
+- mempool chunks in Octree

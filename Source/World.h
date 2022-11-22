@@ -5,6 +5,7 @@
 #include "Player.h"
 #include "ShaderProgram.h"
 #include "VoxelScene.h"
+#include "Skybox.h"
 
 #include <deque>
 
@@ -22,6 +23,7 @@ public:
 		JPG = 1,
 	};
 	uint LoadTexture(const char* image, ImageFormat fmt);
+	uint LoadCubemap(const std::vector<std::string>& faces);
 
 private:
 	uint CalcFrameRate(float frameTime);
@@ -56,4 +58,5 @@ private:
 	//float m_speed = 10.0f;
 
 	Player m_player;
+	Skybox m_skybox;
 };

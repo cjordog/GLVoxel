@@ -13,7 +13,7 @@ typedef unsigned int uint;
 #define PI 3.14159f
 
 // how many voxels per chunk
-constexpr int CHUNK_VOXEL_SIZE = 32;
+constexpr int CHUNK_VOXEL_SIZE = 16;
 // how many voxels per unit of space    TODO::this is broken
 constexpr int UNIT_VOXEL_RESOLUTION = 2;
 // how many units does a chunk take up
@@ -165,6 +165,11 @@ static glm::vec3 s_centeredFaces[BlockFace::NumFaces][4] =
 static uint s_indices[] = {
 	0, 3, 1,
 	1, 3, 2
+};
+
+static uint s_oppositeIndices[] = {
+	0, 1, 3,
+	3, 1, 2
 };
 
 struct Ray
