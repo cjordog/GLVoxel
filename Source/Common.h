@@ -167,6 +167,12 @@ static uint s_indices[] = {
 	1, 3, 2
 };
 
+struct Ray
+{
+	glm::vec3 origin = glm::vec3(0);
+	glm::vec3 dir = glm::vec3(0);
+};
+
 struct Plane
 {
 	Plane() {};

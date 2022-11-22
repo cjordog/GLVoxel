@@ -195,10 +195,17 @@ Chunk::ChunkState Chunk::GetChunkState() const
 bool Chunk::GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex)
 {
 	voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
-	//voxelIndex += glm::i32vec3(1);
+	voxelIndex += glm::i32vec3(1);
 	return voxelIndex.x < CHUNK_VOXEL_SIZE&& voxelIndex.x >= 0
 		&& voxelIndex.y < CHUNK_VOXEL_SIZE&& voxelIndex.y >= 0
 		&& voxelIndex.z < CHUNK_VOXEL_SIZE&& voxelIndex.z >= 0;
+}
+
+Chunk::BlockType Chunk::GetBlockTypeAtWorldPos(const glm::vec3& worldPos)
+{
+	glm::i32vec3 voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
+	voxelIndex += glm::i32vec3(1);
+	return m_voxelData->m_voxels[voxelIndex.x][voxelIndex.y][voxelIndex.z];
 }
 
 bool Chunk::ReadyForMeshGeneration() const

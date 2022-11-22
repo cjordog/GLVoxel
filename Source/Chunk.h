@@ -107,6 +107,7 @@ public:
 	bool VoxelIsCollideableAtWorldPos(const glm::vec3& worldPos) const;
 	ChunkState GetChunkState() const;
 	bool GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& voxelIndex);
+	BlockType GetBlockTypeAtWorldPos(const glm::vec3& worldPos);
 	bool ReadyForMeshGeneration() const;
 
 	bool IsEmpty() const { return bool(m_empty); }

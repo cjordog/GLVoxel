@@ -41,7 +41,7 @@ public:
 	void GenerateMeshes();
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
-	void ResolveCollider(Collider& collider, float timeDelta);
+	void RayCast(const Ray& ray);
 	void ResolveBoxCollider(BoxCollider& collider, float timeDelta);
 	void ResolveBoxCollider2(BoxCollider& collider, float timeDelta);
 #ifdef IMGUI_ENABLED
@@ -115,4 +115,6 @@ private:
 	FastNoise::SmartNode<FastNoise::FractalRidged> m_noiseGeneratorCave;
 
 	std::mutex testMutex;
+
+	glm::vec3 hitPos = glm::vec3(0);
 };

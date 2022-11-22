@@ -331,6 +331,7 @@ static int IntersectMovingAABBAABBAxis(
 	int i2 = (i + 1) % 3;
 	int i3 = (i + 2) % 3;
 
+	// this isnt fully correct. this is just checking initial positions. need to also cast this movement?
 	if (a.max[i2] < b.min[i2] || a.min[i2] > b.max[i2]) return 0;
 	if (a.max[i3] < b.min[i3] || a.min[i3] > b.max[i3]) return 0;
 
@@ -483,20 +484,6 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 		collider.SetVelocity(velocity);
 	}
 	glm::vec3 targetDir = velocity * (timeDelta / 1000.f);
-	//for (int i = 0; i < 3; i++)
-	//{
-	//	if (targetDir[i] == 0.0f)
-	//	{
-	//		continue;
-	//	}
-	//	int index = i * 2 + (targetDir[i] > 0.0f ? 0 : 1);
-	//	int otherIndex = i * 2 + (targetDir[i] > 0.0f ? 1 : 0);
-	//	if (collider.GetSlideMask(index))
-	//	{
-	//		targetDir[i] = 0;
-	//	}
-	//	collider.ClearSlideMask(otherIndex);
-	//}
 
 	AABB translatedAABB = aabb;
 	translatedAABB.Translate(targetDir);
@@ -544,109 +531,107 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 		}
 	}
 
-	index = 0;
 	AABB voxelAABB;
 	glm::vec3 roundedMin = glm::vec3(glm::i32vec3(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION))) * VOXEL_UNIT_SIZE;
 	glm::vec3 voxelAABBMin;
-	float tFirst[3] = { 0 }, tLast[3] = { 0 };
+	float tFirst[3] = { 1, 1, 1 }, tLast[3] = { 1, 1, 1 };
+	float tFirstTemp = 0, tLastTemp = 0;
 	bool collided[3] = { false };
 	int intersectionAxis;
-	for (int i = 0; i < voxelSpaceExtents.x; i++)
+	for (int a = 0; a < 3; a++)
 	{
-		offset.x = i;
-		for (int j = 0; j < voxelSpaceExtents.y; j++)
+		index = 0;
+		if (targetDir[a] == 0.0f)
+			continue;
+		glm::vec3 targetDirElement = glm::vec3(0);
+		targetDirElement[a] = targetDir[a];
+		for (int i = 0; i < voxelSpaceExtents.x; i++)
 		{
-			offset.y = j;
-			for (int k = 0; k < voxelSpaceExtents.z; k++)
+			offset.x = i;
+			for (int j = 0; j < voxelSpaceExtents.y; j++)
 			{
-				offset.z = k;
-				if (localBlocks[index++])
+				offset.y = j;
+				for (int k = 0; k < voxelSpaceExtents.z; k++)
 				{
-					voxelAABBMin = roundedMin + offset * VOXEL_UNIT_SIZE;
-					voxelAABB = { voxelAABBMin, voxelAABBMin + glm::vec3(VOXEL_UNIT_SIZE) };
-					for (int a = 0; a < 3; a++)
+					offset.z = k;
+					if (localBlocks[index++])
 					{
-						if (collided[a] || targetDir[a] == 0.0f)
-							continue;
-						glm::vec3 targetDirElement = glm::vec3(0);
-						targetDirElement[a] = targetDir[a];
-						//voxelAABB.Translate(glm::normalize(targetDirElement * 0.001f));
+						voxelAABBMin = roundedMin + offset * VOXEL_UNIT_SIZE;
+						voxelAABB = { voxelAABBMin, voxelAABBMin + glm::vec3(VOXEL_UNIT_SIZE) };
 						// this is potentially problematic. if theres two AABBs in our path, and were going fast enough to collide with both of them. then only one will get collided with. and it could be the further one.
 						// need to sort by distance or something. combining would help a bit.
-						if (IntersectMovingAABBAABBAxis(voxelAABB, aabb, glm::vec3(0), targetDirElement, 0, tFirst[a], tLast[a], a) != 0)
+						if (IntersectMovingAABBAABBAxis(voxelAABB, aabb, glm::vec3(0), targetDirElement, 0, tFirstTemp, tLastTemp, a) != 0)
 						{
 							collided[a] = true;
+							tFirst[a] = glm::min(tFirst[a], tFirstTemp);
+							tLast[a] = glm::min(tLast[a], tLastTemp);
 						}
 					}
 				}
 			}
 		}
-	}
-
-	for (int a = 0; a < 3; a++)
-	{
-		glm::vec3 targetDirElement = glm::vec3(0);
-		targetDirElement[a] = targetDir[a];
 		if (collided[a])
 		{
 			//collider.Translate(targetDirElement * glm::min(tFirst[a], 1.0f) * 0.999f);
 			collider.SetVelocityIndex(a, 0);
-			//collider.SetSlideMask(intersectionAxis);
 		}
 		else
 		{
 			collider.Translate(targetDirElement);
 		}
 	}
+
+	//for (int a = 0; a < 3; a++)
+	//{
+	//	glm::vec3 targetDirElement = glm::vec3(0);
+	//	targetDirElement[a] = targetDir[a];
+	//	if (collided[a])
+	//	{
+	//		//collider.Translate(targetDirElement * glm::min(tFirst[a], 1.0f) * 0.999f);
+	//		collider.SetVelocityIndex(a, 0);
+	//	}
+	//	else
+	//	{
+	//		collider.Translate(targetDirElement);
+	//	}
+	//}
+
 	fprintf(stderr, "Colliding on %d, %d, %d\n", collided[0], collided[1], collided[2]);
 
 	delete[] localBlocks;
 }
 
-// since velocity * frameDelta buffers are so small, could we not just look if vector goes into new block. 
-// if it does, check that block. resolve vectors easily. small edge cases when crossing multiple borders. could then fallback to amanatides and woo 
-// but that would almost never happen with these vector sizes? maybe lower framerates it could
-void VoxelScene::ResolveCollider(Collider& collider, float timeDelta)
+void VoxelScene::RayCast(const Ray& ray)
 {
-	// just do this terribleness for now. i dont want to deal with physics rn
-	glm::vec3 worldPos = collider.GetPosition();
-
 	// need to solve edge case if outside the octree
-	Chunk* currChunk = m_octree.GetChunkAtWorldPos(worldPos);
+	Chunk* currChunk = m_octree.GetChunkAtWorldPos(ray.origin);
 	if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
 		return;
 
-	glm::vec3 movementDir = collider.m_desiredPosition - worldPos;
-
-	glm::vec3 velocity = collider.GetVelocity();
-	velocity = velocity + glm::vec3(0, -10, 0) * (timeDelta / 1000.f);
-	collider.SetVelocity(velocity);
-	glm::vec3 targetDir = velocity * (timeDelta / 1000.f) + movementDir;
-
 	glm::i32vec3 voxelIndex;
-	bool ret = currChunk->GetVoxelIndexAtWorldPos(worldPos, voxelIndex);
-	const int stepX = targetDir.x > 0 ? 1 : (targetDir.x < 0 ? -1 : 0);
-	const int stepY = targetDir.y > 0 ? 1 : (targetDir.y < 0 ? -1 : 0);
-	const int stepZ = targetDir.z > 0 ? 1 : (targetDir.z < 0 ? -1 : 0);
+	bool ret = currChunk->GetVoxelIndexAtWorldPos(ray.origin, voxelIndex);
+	const int stepX = ray.dir.x > 0 ? 1 : (ray.dir.x < 0 ? -1 : 0);
+	const int stepY = ray.dir.y > 0 ? 1 : (ray.dir.y < 0 ? -1 : 0);
+	const int stepZ = ray.dir.z > 0 ? 1 : (ray.dir.z < 0 ? -1 : 0);
 	const glm::i32vec3 step(stepX, stepY, stepZ);
 
 	glm::vec3 chunkPos = currChunk->GetChunkPos();
 
-	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.x), 0.000001f);
-	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.y), 0.000001f);
-	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(targetDir.z), 0.000001f);
+	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.x), 0.000001f);
+	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.y), 0.000001f);
+	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.z), 0.000001f);
 
 	glm::vec3 voxelBorder = glm::vec3(voxelIndex + glm::max(step, 0)) * VOXEL_UNIT_SIZE;
-	glm::vec3 tMax = (voxelBorder - (worldPos - chunkPos));
-	tMax.x = targetDir.x != 0.0f ? tMax.x / targetDir.x : 1000000.f;
-	tMax.y = targetDir.y != 0.0f ? tMax.y / targetDir.y : 1000000.f;
-	tMax.z = targetDir.z != 0.0f ? tMax.z / targetDir.z : 1000000.f;
+	glm::vec3 tMax = (voxelBorder - (ray.origin - chunkPos));
+	tMax.x = ray.dir.x != 0.0f ? tMax.x / std::abs(ray.dir.x) : 1000000.f;
+	tMax.y = ray.dir.y != 0.0f ? tMax.y / std::abs(ray.dir.y) : 1000000.f;
+	tMax.z = ray.dir.z != 0.0f ? tMax.z / std::abs(ray.dir.z) : 1000000.f;
 
 	bool exitedChunk = false;
 	int exitIndex = 0;
 	float lastT = 0;
 	bool collided = false;
-	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < 1.0f)
+	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < 100.0f)
 	{
 		if (tMax.x < tMax.y)
 		{
@@ -690,24 +675,17 @@ void VoxelScene::ResolveCollider(Collider& collider, float timeDelta)
 		if (exitedChunk)
 		{
 			// bump a little in that direction to make sure were in that new chunk and not right on the edge
-			glm::vec3 currPos = worldPos + targetDir * (lastT + 0.001f);
+			glm::vec3 currPos = ray.origin + ray.dir * (lastT + 0.001f);
 			currChunk = m_octree.GetChunkAtWorldPos(currPos);
+			if (currChunk->GetLOD() != 0)
+				return;
 			currChunk->GetVoxelIndexAtWorldPos(currPos, voxelIndex);
 			exitedChunk = false;
 		}
 	}
-
-	collider.Translate(targetDir * std::min(1.0f, lastT));
-	if (lastT < 1.0f) 
-	{
-		velocity[exitIndex] = 0.0f;
-		collider.SetVelocity(velocity);
-	}
-
-	if (collided && exitIndex == 1)
-	{
-		 collider.isGrounded = true;
-	}
+	hitPos = ray.origin + ray.dir * (lastT + 0.0001f);
+	if (collided)
+		fprintf(stderr, "hit block type %d\n", uint8_t(currChunk->GetBlockTypeAtWorldPos(hitPos)));
 }
 
 void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)
