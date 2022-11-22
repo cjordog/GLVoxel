@@ -161,7 +161,7 @@ Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 {
 	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE)
 		return BlockType::Air;
-	return m_voxelData->m_voxels[x][y][z];
+	return m_voxelData->m_voxels[x + 1][y + 1][z + 1];
 }
 
 bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
@@ -196,9 +196,7 @@ bool Chunk::GetVoxelIndexAtWorldPos(const glm::vec3& worldPos, glm::i32vec3& vox
 {
 	voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
 	voxelIndex += glm::i32vec3(1);
-	return voxelIndex.x < CHUNK_VOXEL_SIZE&& voxelIndex.x >= 0
-		&& voxelIndex.y < CHUNK_VOXEL_SIZE&& voxelIndex.y >= 0
-		&& voxelIndex.z < CHUNK_VOXEL_SIZE&& voxelIndex.z >= 0;
+	return true;
 }
 
 Chunk::BlockType Chunk::GetBlockTypeAtWorldPos(const glm::vec3& worldPos)
@@ -211,6 +209,16 @@ Chunk::BlockType Chunk::GetBlockTypeAtWorldPos(const glm::vec3& worldPos)
 bool Chunk::ReadyForMeshGeneration() const
 {
 	return (AllNeighborsGenerated() && m_state == WaitingForMeshGeneration);
+}
+
+void Chunk::DeleteBlockAtIndex(const glm::i8vec3& index)
+{
+	m_voxelData->m_voxels[index.x + 1][index.y + 1][index.z + 1] = BlockType::Air;
+}
+
+void Chunk::ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b)
+{
+	m_voxelData->m_voxels[index.x + 1][index.y + 1][index.z + 1] = b;
 }
 
 bool Chunk::Renderable() const 
@@ -457,6 +465,8 @@ void Chunk::GenerateMesh()
 
 	if (m_renderable)
 		s_renderListCallback(this);
+
+	m_buffersGenerated = false;
 
 	auto endTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> time = endTime - startTime;

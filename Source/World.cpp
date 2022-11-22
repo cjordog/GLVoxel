@@ -80,7 +80,10 @@ void World::Update(float updateTime, InputData* inputData)
 	UpdatePhysics(updateTime);
 	m_player.UpdateCamera(updateTime, inputData);
 	m_voxelScene.Update(m_player.GetCamera().GetPosition());
-	m_voxelScene.RayCast({ m_player.GetCamera().GetPosition(), m_player.GetCamera().GetForward() });
+	if (inputData->m_mouseButtons.x)
+	{
+		m_voxelScene.DeleteBlock({ m_player.GetCamera().GetPosition(), m_player.GetCamera().GetForward() });
+	}
 
 	CalcFrameRate(updateTime);
 }

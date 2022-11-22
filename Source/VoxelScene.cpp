@@ -88,6 +88,26 @@ VoxelScene::VoxelScene()
 	glVertexAttribFormat(0, 3, GL_FLOAT, false, offsetof(VertexP, position));
 	glVertexAttribBinding(0, vertexBindingPoint);
 	glEnableVertexAttribArray(0);
+
+	for (uint i = 0; i < BlockFace::NumFaces; i++)
+	{
+		for (uint j = 0; j < 4; j++)
+		{
+			m_aabbVerts.push_back(VertexP{ (s_faces[i][j] * float(CHUNK_UNIT_SIZE * 2)) });
+		}
+		for (uint j = 0; j < 6; j++)
+		{
+			m_aabbIndices.push_back(s_indices[j] + m_aabbVertexCount);
+		}
+		m_aabbIndexCount += 6;
+		m_aabbVertexCount += 4;
+	}
+
+	glBindVertexArray(m_debugWireframeVAO);
+	glBindBuffer(GL_ARRAY_BUFFER, m_aabbVBO);
+	glBufferData(GL_ARRAY_BUFFER, m_aabbVertexCount * sizeof(VertexP), (float*)m_aabbVerts.data(), GL_STATIC_DRAW);
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
+	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_aabbIndexCount * sizeof(uint), m_aabbIndices.data(), GL_STATIC_DRAW);
 }
 
 VoxelScene::~VoxelScene()
@@ -159,10 +179,10 @@ void VoxelScene::Update(const glm::vec3& position)
 		}
 	}
 
-	if (RenderSettings::Get().renderDebugWireframes)
-	{
-		GatherBoundingBoxes();
-	}
+	//if (RenderSettings::Get().renderDebugWireframes)
+	//{
+	//	GatherBoundingBoxes();
+	//}
 }
 
 void VoxelScene::ResetVoxelScene()
@@ -245,6 +265,7 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	{
 		RenderDebugBoundingBoxes(camera, debugCullCamera);
 	}
+	RenderHitPos(camera, debugCullCamera);
 }
 
 static int TestAABBAABB(AABB a, AABB b)
@@ -601,12 +622,12 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 	delete[] localBlocks;
 }
 
-void VoxelScene::RayCast(const Ray& ray)
+bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 {
 	// need to solve edge case if outside the octree
 	Chunk* currChunk = m_octree.GetChunkAtWorldPos(ray.origin);
 	if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
-		return;
+		return false;
 
 	glm::i32vec3 voxelIndex;
 	bool ret = currChunk->GetVoxelIndexAtWorldPos(ray.origin, voxelIndex);
@@ -615,20 +636,17 @@ void VoxelScene::RayCast(const Ray& ray)
 	const int stepZ = ray.dir.z > 0 ? 1 : (ray.dir.z < 0 ? -1 : 0);
 	const glm::i32vec3 step(stepX, stepY, stepZ);
 
-	glm::vec3 chunkPos = currChunk->GetChunkPos();
-
 	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.x), 0.000001f);
 	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.y), 0.000001f);
 	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.z), 0.000001f);
 
 	glm::vec3 voxelBorder = glm::vec3(voxelIndex + glm::max(step, 0)) * VOXEL_UNIT_SIZE;
-	glm::vec3 tMax = (voxelBorder - (ray.origin - chunkPos));
+	glm::vec3 tMax = (voxelBorder - (ray.origin - currChunk->GetChunkPos()));
 	tMax.x = ray.dir.x != 0.0f ? tMax.x / std::abs(ray.dir.x) : 1000000.f;
 	tMax.y = ray.dir.y != 0.0f ? tMax.y / std::abs(ray.dir.y) : 1000000.f;
 	tMax.z = ray.dir.z != 0.0f ? tMax.z / std::abs(ray.dir.z) : 1000000.f;
 
 	bool exitedChunk = false;
-	int exitIndex = 0;
 	float lastT = 0;
 	bool collided = false;
 	while (!(collided = currChunk->VoxelIsCollideable(voxelIndex)) && lastT < 100.0f)
@@ -638,17 +656,15 @@ void VoxelScene::RayCast(const Ray& ray)
 			if (tMax.x < tMax.z)
 			{
 				voxelIndex.x += stepX;
-				exitedChunk = (voxelIndex.x > CHUNK_VOXEL_SIZE || voxelIndex.x < 0);
+				exitedChunk = (voxelIndex.x >= CHUNK_VOXEL_SIZE || voxelIndex.x < 0);
 				lastT = tMax.x;
-				exitIndex = 0;
 				tMax.x += tDeltaX;
 			}
 			else
 			{
 				voxelIndex.z += stepZ;
-				exitedChunk = (voxelIndex.z > CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
+				exitedChunk = (voxelIndex.z >= CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
 				lastT = tMax.z;
-				exitIndex = 2;
 				tMax.z += tDeltaZ;
 
 			}
@@ -658,17 +674,15 @@ void VoxelScene::RayCast(const Ray& ray)
 			if (tMax.y < tMax.z)
 			{
 				voxelIndex.y += stepY;
-				exitedChunk = (voxelIndex.y > CHUNK_VOXEL_SIZE || voxelIndex.y < 0);
+				exitedChunk = (voxelIndex.y >= CHUNK_VOXEL_SIZE || voxelIndex.y < 0);
 				lastT = tMax.y;
-				exitIndex = 1;
 				tMax.y += tDeltaY;
 			}
 			else 
 			{
 				voxelIndex.z += stepZ;
-				exitedChunk = (voxelIndex.z > CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
+				exitedChunk = (voxelIndex.z >= CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
 				lastT = tMax.z;
-				exitIndex = 2;
 				tMax.z += tDeltaZ;
 			}
 		}
@@ -678,50 +692,30 @@ void VoxelScene::RayCast(const Ray& ray)
 			glm::vec3 currPos = ray.origin + ray.dir * (lastT + 0.001f);
 			currChunk = m_octree.GetChunkAtWorldPos(currPos);
 			if (currChunk->GetLOD() != 0)
-				return;
+				return false;
 			currChunk->GetVoxelIndexAtWorldPos(currPos, voxelIndex);
 			exitedChunk = false;
 		}
 	}
-	hitPos = ray.origin + ray.dir * (lastT + 0.0001f);
+	hitPos = currChunk->GetChunkPos() + (glm::vec3(voxelIndex) + glm::vec3(0.5f)) * VOXEL_UNIT_SIZE;
+	//if (collided)
+	//	fprintf(stderr, "hit block type %d\n", uint8_t(currChunk->GetBlockType(voxelIndex.x, voxelIndex.y, voxelIndex.z)));
 	if (collided)
-		fprintf(stderr, "hit block type %d\n", uint8_t(currChunk->GetBlockTypeAtWorldPos(hitPos)));
+		voxelRayHit = { voxelIndex, currChunk, ray.origin + ray.dir * lastT };
+
+	return collided;
 }
 
-void VoxelScene::FillBoundingBoxBuffer(const AABB& aabb)
+bool VoxelScene::DeleteBlock(const Ray& ray)
 {
-	glm::vec3 extents = aabb.max - aabb.min;
-	for (uint i = 0; i < BlockFace::NumFaces; i++)
+	VoxelRayHit hit;
+	if (RayCast(ray, hit))
 	{
-		for (uint j = 0; j < 4; j++)
-		{
-			// extents are half extents...
-			m_aabbVerts.push_back(VertexP{(s_centeredFaces[i][j] * extents + aabb.min)});
-		}
-		for (uint j = 0; j < 6; j++)
-		{
-			m_aabbIndices.push_back(s_indices[j] + m_aabbVertexCount);
-		}
-		m_aabbIndexCount += 6;
-		m_aabbVertexCount += 4;
+		hit.chunk->DeleteBlockAtIndex(hit.voxelIndex);
+		hit.chunk->GenerateMesh();
 	}
+	return true;
 }
-
-void VoxelScene::GatherBoundingBoxes()
-{
-	ZoneScoped;
-	m_aabbIndexCount = 0;
-	m_aabbVertexCount = 0;
-	m_aabbVerts.clear();
-	m_aabbIndices.clear();
-	//for (const auto& chunk : m_renderList)
-	for (const Chunk* chunk : m_frameChunks)
-	{
-		if (!chunk->IsEmpty())
-			FillBoundingBoxBuffer(chunk->GetBoundingBox());
-	}
-}
-
 
 // TODO:: turn this into an indexed draw on single cube mesh
 void VoxelScene::RenderDebugBoundingBoxes(const Camera* camera, const Camera* debugCullCamera)
@@ -729,17 +723,43 @@ void VoxelScene::RenderDebugBoundingBoxes(const Camera* camera, const Camera* de
 	s_debugWireframeShaderProgram.Use();
 	glDepthMask(GL_FALSE);
 	glBindVertexArray(m_debugWireframeVAO);
-	glBindBuffer(GL_ARRAY_BUFFER, m_aabbVBO);
-	glBufferData(GL_ARRAY_BUFFER, m_aabbVertexCount * sizeof(VertexP), (float*)m_aabbVerts.data(), GL_DYNAMIC_DRAW);
-	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
-	glBufferData(GL_ELEMENT_ARRAY_BUFFER, m_aabbIndexCount * sizeof(uint), m_aabbIndices.data(), GL_DYNAMIC_DRAW);
-
 	glBindVertexBuffer(0, m_aabbVBO, 0, sizeof(VertexP));
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
 
-	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * glm::mat4(1)));
+	//glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * glm::mat4(1)));
 	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
-	glDrawElements(GL_LINES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
+
+	glm::mat4x4 modelMat;
+	for (Chunk* chunk : m_frameChunks)
+	{
+		if (chunk->IsEmpty())
+			continue;
+
+		chunk->GetModelMat(modelMat);
+		glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(glm::scale(camera->GetViewMatrix() * modelMat, glm::vec3(UNIT_VOXEL_RESOLUTION))));
+
+		glDrawElements(GL_LINES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
+	}
+
+	glDepthMask(GL_TRUE);
+}
+
+void VoxelScene::RenderHitPos(const Camera* camera, const Camera* debugCullCamera)
+{
+	s_debugWireframeShaderProgram.Use();
+	glDepthMask(GL_FALSE);
+	glBindVertexArray(m_debugWireframeVAO);
+	glBindVertexBuffer(0, m_aabbVBO, 0, sizeof(VertexP));
+	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
+
+	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
+
+	glm::mat4x4 modelMat = glm::scale(glm::translate(glm::mat4(1.0f), hitPos), glm::vec3(float(1.0f / CHUNK_UNIT_SIZE)));
+
+	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
+
+	glDrawElements(GL_TRIANGLES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
+
 	glDepthMask(GL_TRUE);
 }
 
@@ -752,11 +772,6 @@ void VoxelScene::RenderImGui()
 	ImGui::Text("%f avg gen time", s_imguiData.avgChunkGenTime);
 
 	ImGui::SliderFloat("cave frequency", &m_chunkGenParamsNext.caveFrequency, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
-	//float terrainHeight = 100.0f;
-	//float terrainLacunarity = 1.0f;
-	//float terrainGain = 1.0f;
-	//float terrainFrequency = 1.0f;
-	//int terrainOctaves = 4;
 	ImGui::SliderFloat("Terrain Height", &m_chunkGenParamsNext.terrainHeight, 1.f, 2000.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 	ImGui::SliderFloat("Terrain Lacunarity", &m_chunkGenParamsNext.terrainLacunarity, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);
 	ImGui::SliderFloat("Terrain Gain", &m_chunkGenParamsNext.terrainGain, 0.01f, 100.f, "%.2f", ImGuiSliderFlags_Logarithmic);

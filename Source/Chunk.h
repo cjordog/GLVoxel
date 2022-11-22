@@ -110,6 +110,9 @@ public:
 	BlockType GetBlockTypeAtWorldPos(const glm::vec3& worldPos);
 	bool ReadyForMeshGeneration() const;
 
+	void DeleteBlockAtIndex(const glm::i8vec3& index);
+	void ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b);
+
 	bool IsEmpty() const { return bool(m_empty); }
 	bool IsNoGeo() const { return bool(m_noGeo); }
 	bool Renderable() const; // can we turn our render chunks back into const Chunk*?

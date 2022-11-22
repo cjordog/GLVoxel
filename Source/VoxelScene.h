@@ -29,6 +29,13 @@ public:
 		bool m_regenerateWorld = false;
 	};
 
+	struct VoxelRayHit
+	{
+		glm::i8vec3 voxelIndex;
+		Chunk* chunk;
+		glm::vec3 hitPosition;
+	};
+
 	VoxelScene();
 	~VoxelScene();
 
@@ -41,7 +48,8 @@ public:
 	void GenerateMeshes();
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
-	void RayCast(const Ray& ray);
+	bool RayCast(const Ray& ray, VoxelRayHit& voxelRayHit);
+	bool DeleteBlock(const Ray& ray);
 	void ResolveBoxCollider(BoxCollider& collider, float timeDelta);
 	void ResolveBoxCollider2(BoxCollider& collider, float timeDelta);
 #ifdef IMGUI_ENABLED
@@ -65,9 +73,8 @@ public:
 
 
 private:
-	void FillBoundingBoxBuffer(const AABB& aabb);
-	void GatherBoundingBoxes();
 	void RenderDebugBoundingBoxes(const Camera* camera, const Camera* debugCullCamera);
+	void RenderHitPos(const Camera* camera, const Camera* debugCullCamera);
 #ifdef DEBUG
 	void ValidateChunks();
 #endif
@@ -104,8 +111,8 @@ private:
 
 	std::vector<VertexP> m_aabbVerts;
 	std::vector<uint> m_aabbIndices;
-	uint m_aabbVertexCount;
-	uint m_aabbIndexCount;
+	uint m_aabbVertexCount = 0;
+	uint m_aabbIndexCount = 0;
 
 	bool m_useOctree = true;
 	std::vector<Chunk*> m_frameChunks;
