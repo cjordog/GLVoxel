@@ -83,7 +83,7 @@ void Skybox::Render(const Camera& camera)
 	glDepthMask(GL_FALSE);
 	s_skyboxShaderProgram.Use();
 
-	glUniformMatrix4fv(0, 1, GL_FALSE, &camera.GetViewMatrix()[0][0]);
+	glUniformMatrix4fv(0, 1, GL_FALSE, &glm::mat4(glm::mat3(camera.GetViewMatrix()))[0][0]);
 	glUniformMatrix4fv(1, 1, GL_FALSE, &camera.GetProjMatrix()[0][0]);
 
 	glBindVertexArray(s_VAO);
