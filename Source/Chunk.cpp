@@ -82,7 +82,9 @@ void Chunk::CreateResources(const glm::vec3& chunkPos, uint lod)
 	glm::vec3 worldSpacePos = chunkPos;
 	m_AABB = AABB(worldSpacePos, worldSpacePos + glm::vec3(CHUNK_UNIT_SIZE * m_scale));
 
-	m_modelMat = glm::scale(glm::translate(glm::mat4(1.0f), m_chunkPos), glm::vec3(float(m_scale / UNIT_VOXEL_RESOLUTION)));
+	m_modelMat = glm::mat4(1.0f);
+	m_modelMat = glm::translate(m_modelMat, m_chunkPos);
+	m_modelMat = glm::scale(m_modelMat, glm::vec3(float(m_scale / UNIT_VOXEL_RESOLUTION)));
 }
 
 void Chunk::InitShared(

@@ -50,6 +50,7 @@ public:
 	void GenerateMeshes();
 	void ResetVoxelScene();
 	void Render(const Camera* camera, const Camera* debugCullCamera);
+	void RenderTransparency(const Camera* camera, const Camera* debugCullCamera);
 	bool RayCast(const Ray& ray, VoxelRayHit& voxelRayHit);
 	bool DeleteBlock(const Ray& ray);
 	void ResolveBoxCollider(BoxCollider& collider, float timeDelta);

@@ -93,7 +93,7 @@ VoxelScene::VoxelScene()
 	{
 		for (uint j = 0; j < 4; j++)
 		{
-			m_aabbVerts.push_back(VertexP{ (s_faces[i][j] * float(CHUNK_UNIT_SIZE * 2)) });
+			m_aabbVerts.push_back(VertexP{ (s_faces[i][j] * float(CHUNK_UNIT_SIZE)) });
 		}
 		for (uint j = 0; j < 6; j++)
 		{
@@ -205,8 +205,7 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 {
 	ZoneNamed(SetupRender, true);
 	s_chunkShaderProgram.Use();
-	m_projMat = glm::perspective(camera->GetFovY(), camera->GetAspectRatio(), camera->GetNearClip(), camera->GetFarClip());
-	glUniformMatrix4fv(2, 1, GL_FALSE, &m_projMat[0][0]);
+	glUniformMatrix4fv(2, 1, GL_FALSE, &camera->GetProjMatrix()[0][0]);
 	glUniformMatrix4fv(1, 1, GL_FALSE, &camera->GetViewMatrix()[0][0]);
 	glUniform3fv(50, 1, &camera->GetPosition()[0]);
 
@@ -255,7 +254,10 @@ void VoxelScene::Render(const Camera* camera, const Camera* debugCullCamera)
 	s_imguiData.numRenderChunks = numRenderChunks;
 	s_imguiData.numVerts = vertexCount;
 	s_imguiData.avgChunkGenTime = totalGenTime / s_imguiData.numRenderChunks;
+}
 
+void VoxelScene::RenderTransparency(const Camera* camera, const Camera* debugCullCamera)
+{
 	if (RenderSettings::Get().renderDebugWireframes)
 	{
 		RenderDebugBoundingBoxes(camera, debugCullCamera);
@@ -756,7 +758,7 @@ void VoxelScene::RenderDebugBoundingBoxes(const Camera* camera, const Camera* de
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
 
 	//glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * glm::mat4(1)));
-	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
+	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(camera->GetProjMatrix()));
 
 	glm::mat4x4 modelMat;
 	for (Chunk* chunk : m_frameChunks)
@@ -765,7 +767,7 @@ void VoxelScene::RenderDebugBoundingBoxes(const Camera* camera, const Camera* de
 			continue;
 
 		chunk->GetModelMat(modelMat);
-		glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(glm::scale(camera->GetViewMatrix() * modelMat, glm::vec3(UNIT_VOXEL_RESOLUTION))));
+		glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * glm::scale(modelMat, glm::vec3(UNIT_VOXEL_RESOLUTION))));
 
 		glDrawElements(GL_LINES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
 	}

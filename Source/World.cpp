@@ -75,6 +75,7 @@ void World::Render()
 #endif
 	m_voxelScene.Render(&m_player.GetCamera(), &m_player.GetCamera());
 	m_skybox.Render(m_player.GetCamera());
+	m_voxelScene.RenderTransparency(&m_player.GetCamera(), &m_player.GetCamera());
 
 #ifdef IMGUI_ENABLED
 	ImGuiRenderStart();

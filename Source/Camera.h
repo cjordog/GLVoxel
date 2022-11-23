@@ -15,6 +15,7 @@ public:
 	void CalculateFrustum();
 
 	const glm::mat4& GetViewMatrix() const { return m_viewMatrix; }
+	const glm::mat4& GetProjMatrix() const { return m_projMatrix; }
 	const glm::vec3& GetPosition() const { return m_position; }
 	const glm::vec3& GetForward() const { return m_forward; }
 	const glm::vec3& GetRight() const { return m_right; }
@@ -30,6 +31,7 @@ public:
 private:
 	glm::vec3 m_position = glm::vec3(0);
 	glm::mat4 m_viewMatrix = glm::mat4(1);
+	glm::mat4 m_projMatrix = glm::mat4(1);
 	Frustum m_frustum;
 
 	float m_pitch = 0.0f;
