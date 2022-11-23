@@ -100,6 +100,7 @@ public:
 	const uint GetLOD() const { return m_LOD; }
 	const float GetScale() const { return m_scale; }
 	bool IsDeletable() const { return m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers; }
+	bool IsBrandNew() const { return m_state == ChunkState::BrandNew; }
 	bool IsDone() const { return m_state == ChunkState::Done; }
 	glm::vec3 GetChunkPos() { return m_chunkPos; }
 

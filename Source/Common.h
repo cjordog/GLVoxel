@@ -13,7 +13,7 @@ typedef unsigned int uint;
 #define PI 3.14159f
 
 // how many voxels per chunk
-constexpr int CHUNK_VOXEL_SIZE = 16;
+constexpr int CHUNK_VOXEL_SIZE = 32;
 // how many voxels per unit of space    TODO::this is broken
 constexpr int UNIT_VOXEL_RESOLUTION = 2;
 // how many units does a chunk take up

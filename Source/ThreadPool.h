@@ -1,11 +1,13 @@
 // very naive approach to a thread pool. loosely adopted from C++ concurrency in action
 
 #include <atomic>
-#include <concurrent_priority_queue.h> // this might require some specific windows sdk version? 
+//#include <concurrent_priority_queue.h> // this might require some specific windows sdk version? 
+#include <queue>
 #include <vector>
 #include <thread>
 #include <functional>
 #include <unordered_map>
+#include <mutex>
 
 #include "RenderSettings.h"
 
@@ -39,6 +41,7 @@ public:
 	ThreadPool()
 		: m_done(false)
 	{
+		std::unique_lock lock(queueMutex);
 		RenderSettings& r = RenderSettings::Get();
 		if (!r.mtEnabled)
 			return;
@@ -64,11 +67,10 @@ public:
 
 	~ThreadPool()
 	{
+		std::unique_lock lock(queueMutex);
 		m_done = true;
-		m_workQueue.clear();
-		//?
-
-		//WaitForAllThreadsFinished();
+		// this clears the queue
+		std::priority_queue<Job, std::vector<Job>, JobCmp>().swap(m_workQueue);
 		for (auto& thread : m_threads)
 			thread.join();
 		delete[] m_working;
@@ -77,8 +79,10 @@ public:
 	template<typename FunctionType>
 	void Submit(FunctionType t, JobPriority prio)
 	{
+		queueMutex.lock();
 		m_workQueue.push({ jobCount++, std::function<void()>(t), prio });
 		size_t workQueueSize = m_workQueue.size();
+		queueMutex.unlock();
 		if (workQueueSize == 1)
 		{
 			cv.notify_one();
@@ -96,18 +100,25 @@ public:
 
 	bool GetPoolJob(Job& j)
 	{
-		if (m_workQueue.try_pop(j))
+		std::unique_lock lock(queueMutex);
+		if (!m_workQueue.empty())
+		{
+			j = m_workQueue.top();
+			m_workQueue.pop();
 			return true;
+		}
 		return false;
 	}
 
 	void ClearJobPool()
 	{
-		m_workQueue.clear();
+		std::unique_lock lock(queueMutex);
+		std::priority_queue<Job, std::vector<Job>, JobCmp>().swap(m_workQueue);
 	}
 
 	void WaitForAllThreadsFinished()
 	{
+		std::unique_lock<std::mutex> lock(queueMutex);
 		while (1)
 		{
 			bool success = true;
@@ -124,8 +135,9 @@ public:
 		}
 	}
 
-	int GetSize() const
+	int GetSize()
 	{
+		std::unique_lock<std::mutex> lock(queueMutex);
 		return m_workQueue.size();
 	}
 
@@ -142,21 +154,26 @@ public:
 private:
 	std::atomic_bool m_done = false;
 	std::atomic_bool* m_working = nullptr;
-	Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
+	//Concurrency::concurrent_priority_queue<Job, JobCmp> m_workQueue;
+	std::priority_queue<Job, std::vector<Job>, JobCmp> m_workQueue;
 	std::vector<std::thread> m_threads;
 	unsigned jobCount = 0;
 	std::unordered_map<std::thread::id, int> m_threadIDs;
 	int m_numThreads = 0;
 	std::condition_variable cv;
 	std::mutex cvMutex;
+	std::mutex queueMutex;
 
 	void WorkerThread(int threadID)
 	{
 		while (!m_done)
 		{
-			Job j;
-			if (m_workQueue.try_pop(j))
+			queueMutex.lock();
+			if (!m_workQueue.empty())
 			{
+				Job j = m_workQueue.top();
+				m_workQueue.pop();
+				queueMutex.unlock();
 				// is this horrible?
 				m_working[threadID] = true;
 				j.func();
@@ -164,6 +181,7 @@ private:
 			}
 			else
 			{
+				queueMutex.unlock();
 				std::unique_lock lock(cvMutex);
 				cv.wait(lock, [&] {return m_workQueue.size() > 0; });
 			}

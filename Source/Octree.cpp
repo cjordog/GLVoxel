@@ -196,7 +196,7 @@ bool Octree::ReleaseChildrenBlocking(std::shared_ptr<OctreeNode> node)
 {
 	if (node->m_chunk)
 	{
-		while (!node->m_chunk->IsDeletable())
+		while (!(node->m_chunk->IsDeletable() || node->m_chunk->IsBrandNew()))
 			continue;
 		delete node->m_chunk;
 		node->m_chunk = nullptr;
@@ -207,20 +207,21 @@ bool Octree::ReleaseChildrenBlocking(std::shared_ptr<OctreeNode> node)
 	}
 	for (uint i = 0; i < 8; i++)
 	{
-		if (!ReleaseChildren(node->m_children[i]))
+		if (!ReleaseChildrenBlocking(node->m_children[i]))
 			return false;
-	}
-	for (uint i = 0; i < 8; i++)
-	{
-		if (node->m_children[i]->m_chunk)
-		{
-			while (!node->m_children[i]->m_chunk->IsDeletable())
-				continue;
-			delete node->m_children[i]->m_chunk;
-			node->m_children[i]->m_chunk = nullptr;
-		}
 		node->m_children[i] = nullptr;
 	}
+	//for (uint i = 0; i < 8; i++)
+	//{
+	//	if (node->m_children[i]->m_chunk)
+	//	{
+	//		while (!node->m_children[i]->m_chunk->IsDeletable())
+	//			continue;
+	//		delete node->m_children[i]->m_chunk;
+	//		node->m_children[i]->m_chunk = nullptr;
+	//	}
+	//	node->m_children[i] = nullptr;
+	//}
 	return true;
 }
 

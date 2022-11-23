@@ -686,7 +686,7 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 			// bump a little in that direction to make sure were in that new chunk and not right on the edge
 			glm::vec3 currPos = ray.origin + ray.dir * (lastT + 0.001f);
 			currChunk = m_octree.GetChunkAtWorldPos(currPos);
-			if (currChunk->GetLOD() != 0)
+			if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
 				return false;
 			currChunk->GetVoxelIndexAtWorldPos(currPos, voxelIndex);
 			exitedChunk = false;
