@@ -27,6 +27,8 @@ static MemPooler<Chunk::VoxelData> s_memPool(30000);
 static std::vector<uint> s_chunkIndices;
 uint s_chunkEBO = 0;
 
+Chunk::ScratchpadMemoryLayout* Chunk::s_scratchpadMemory;
+
 Chunk::Chunk()
 {
 	// can bulk generate these from our voxelscene when we create a bunch of chunks.
@@ -97,6 +99,7 @@ void Chunk::InitShared(
 	s_threadIDs = threadIDs;
 
 	s_sharedScratchpadMemory = new float[2 * s_threadIDs.size() * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+	s_scratchpadMemory = new ScratchpadMemoryLayout[s_threadIDs.size()];
 
 	s_generateMeshCallback = generateMeshCallback;
 	s_renderListCallback = renderListCallback;
@@ -288,7 +291,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 	}
 }
 
-void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::SmartNode<>* noiseGeneratorCave)
+void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 {
 	auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -300,15 +303,16 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::Sm
 	constexpr int domainTurbulence = 0;// 10 * UNIT_VOXEL_RESOLUTION;
 
 	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE + domainTurbulence * 2;
-	float noiseOutput[turbulentRowSize * turbulentRowSize];
-	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
-	float* noiseOutput3D = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * 2 * s_threadIDs[std::this_thread::get_id()]];
-	float* noiseOutput3D2 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * (2 * s_threadIDs[std::this_thread::get_id()] + 1)];
+	ScratchpadMemoryLayout& scratchMem = s_scratchpadMemory[s_threadIDs[std::this_thread::get_id()]];
+	float* noiseOutput2D = scratchMem.noise2D1;
+	float* noiseOutput2D2 = scratchMem.noise2D2;
+	float* noiseOutput3D = scratchMem.noise3D1;
+	float* noiseOutput3D2 = scratchMem.noise3D2;
 	if (!s_chunkGenParams->m_debugFlatWorld)
 	{
 		// samples once per int, so we pass in bigger positions than our actual worldspace position...
-		noiseGenerator->get()->GenUniformGrid2D(
-			noiseOutput,
+		generators->noiseGenerator->GenUniformGrid2D(
+			noiseOutput2D,
 			((m_chunkPos.x - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.z - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			turbulentRowSize,
@@ -317,8 +321,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::Sm
 			1
 		);
 		// this is kinda overkill for just the dirt
-		noiseGenerator->get()->GenUniformGrid2D(
-			noiseOutput2,
+		generators->noiseGenerator->GenUniformGrid2D(
+			noiseOutput2D2,
 			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			INT_CHUNK_VOXEL_SIZE,
@@ -326,7 +330,7 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::Sm
 			FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
 			1337
 		);
-		noiseGenerator->get()->GenUniformGrid3D(
+		generators->noiseGenerator->GenUniformGrid3D(
 			noiseOutput3D2,
 			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
@@ -337,7 +341,7 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::Sm
 			FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale,
 			1337
 		);
-		noiseGeneratorCave->get()->GenUniformGrid3D(
+		generators->noiseGeneratorCave->GenUniformGrid3D(
 			noiseOutput3D,
 			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
@@ -368,8 +372,9 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::Sm
 				float worldSpaceNoiseVal, noiseVal2, noiseVal3, dirtHeight;
 				if (!s_chunkGenParams->m_debugFlatWorld)
 				{
-					worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
-					noiseVal2 = noiseOutput2[x + INT_CHUNK_VOXEL_SIZE * z];
+					worldSpaceNoiseVal = (noiseOutput2D[index] + 1) * 0.5f * TERRAIN_HEIGHT;
+					//worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
+					noiseVal2 = noiseOutput2D2[x + INT_CHUNK_VOXEL_SIZE * z];
 					noiseVal3 = noiseOutput3D[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}

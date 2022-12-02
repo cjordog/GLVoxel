@@ -79,6 +79,12 @@ public:
 		BlockType m_voxels[INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE][INT_CHUNK_VOXEL_SIZE] = { BlockType(0) };
 	};
 
+	struct ChunkNoiseGenerators
+	{
+		FastNoise::SmartNode<> noiseGenerator; 
+		FastNoise::SmartNode<> noiseGeneratorCave;
+	};
+
 	static void InitShared(
 		std::unordered_map<std::thread::id, int>& threadIDs, 
 		std::function<void(Chunk*)> generateMeshCallback, 
@@ -123,7 +129,7 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
-	void GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::SmartNode<>* noiseGeneratorCave);
+	void GenerateVolume(const ChunkNoiseGenerators* generators);
 	void GenerateVolume2();
 	void GenerateMesh();
 	void SetNeedsLODSeam(BlockFace f);
@@ -136,6 +142,15 @@ public:
 	std::mutex m_mutex;
 
 	double m_genTime = 0.0f;
+
+	struct ScratchpadMemoryLayout
+	{
+		float noise3D1[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise3D2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise2D1[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise2D2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+	};
+	static ScratchpadMemoryLayout* s_scratchpadMemory;
 
 private:
 	void GenerateMeshInt();

@@ -43,9 +43,8 @@ VoxelScene::VoxelScene()
 	//m_noiseGenerator->SetGain(0.1f);
 	//m_noiseGenerator->SetLacunarity(10);
 	//m_noiseGenerator->SetOctaveCount(3);
-	m_noiseGenerator = FastNoise::NewFromEncodedNodeTree("EQADAAAAAAAAQBAAAAAAPxkADQADAAAAAAAAQAkAAAAAAD8AAAAAAAEEAAAAAABI4TpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAPwAAAAAA");
-
-	m_noiseGeneratorCave = FastNoise::NewFromEncodedNodeTree("DQACAAAAAAAAQBoAAJqZGb8BGwAPAAIAAAAAAABADQACAAAAAAAAQAkAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAACAvwAAAAA/AAAAAAA=");
+	m_noiseGenerators.noiseGenerator = FastNoise::NewFromEncodedNodeTree("EQADAAAAAAAAQBAAAAAAPxkADQADAAAAAAAAQAkAAAAAAD8AAAAAAAEEAAAAAABI4TpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAPwAAAAAA");
+	m_noiseGenerators.noiseGeneratorCave = FastNoise::NewFromEncodedNodeTree("DQACAAAAAAAAQBoAAJqZGb8BGwAPAAIAAAAAAABADQACAAAAAAAAQAkAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAACAvwAAAAA/AAAAAAA=");
 	//auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
 	//m_noiseGeneratorCave->SetSource(fnSimplex2);
 	//m_noiseGeneratorCave->SetOctaveCount(2);
@@ -164,7 +163,7 @@ void VoxelScene::Update(const glm::vec3& position)
 	m_octree.GenerateFromPosition(position, newChunks, m_frameChunks);
 	for (Chunk* chunk : newChunks)
 	{
-		m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk, &m_noiseGenerator, &m_noiseGeneratorCave), chunk->GetLOD() == 0 ? Priority_High : Priority_Med);
+		m_threadPool.Submit(std::bind(&Chunk::GenerateVolume, chunk, &m_noiseGenerators), chunk->GetLOD() == 0 ? Priority_High : Priority_Med);
 	}
 
 	if (!RenderSettings::Get().mtEnabled)
