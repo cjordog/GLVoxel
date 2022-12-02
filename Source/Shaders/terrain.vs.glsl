@@ -6,10 +6,13 @@ layout (location = 0) uniform mat4 worldMat;
 layout (location = 1) uniform mat4 viewMat;
 layout (location = 2) uniform mat4 projMat;
 
-out vec3 outCol;
-out vec2 outUV;
-out vec3 outNorm;
-out vec4 outPos;
+out VS_OUT
+{
+	vec3 color;
+	vec2 uv;
+	vec3 normal;
+	vec4 position;
+} vs_out;
 
 vec3 colorArray[] = 
 {
@@ -34,10 +37,10 @@ void main()
 	vec3 localPos = vec3(uint(inData & 0x3Fu), (inData & 0xFC0u) >> 6u, (inData & 0x3F000u) >> 12u);
 	uint normalIndex = (inData & 0x1C0000u) >> 18u;
 	uint blockType = (inData & 0x1FE00000u) >> 21u;
-	outPos = worldMat * vec4(localPos, 1.0f);
-    gl_Position = projMat * viewMat * outPos;
-	outCol = colorArray[blockType];
-	outUV = vec2(0, 0);
+	vs_out.position = worldMat * vec4(localPos, 1.0f);
+    gl_Position = projMat * viewMat * vs_out.position;
+	vs_out.color = colorArray[blockType];
+	vs_out.uv = vec2(0, 0);
 	// need to be transformed into worldspace, fine now since theres no rotation
-	outNorm = blockNormals[normalIndex];
+	vs_out.normal = blockNormals[normalIndex];
 }

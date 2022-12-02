@@ -5,10 +5,13 @@ layout (location = 50) uniform vec3 cameraPos;
 
 out vec4 FragColor;
 
-in vec3 outCol;
-in vec2 outUV;
-in vec3 outNorm;
-in vec4 outPos;
+in VS_OUT
+{
+	vec3 color;
+	vec2 uv;
+	vec3 normal;
+	vec4 position;
+} fs_in;
 
 vec3 sunDir = { 0.1f, -1.0f, 0.2f };
 float a = 1.0f;
@@ -35,12 +38,12 @@ vec3 ApplyFog( in vec3  rgb,      // original color of the pixel
 void main()
 {
 	const float ambientStrength = 0.3f;
-	const vec3 ambientColor = outCol;
-	const vec3 diffuseColor = outCol;
+	const vec3 ambientColor = fs_in.color;
+	const vec3 diffuseColor = fs_in.color;
 	sunDir = normalize(sunDir);
 
-	vec3 diffuse = clamp(dot(-sunDir, outNorm), 0.0f, 1.0f) * diffuseColor * (1.0f - ambientStrength);
+	vec3 diffuse = clamp(dot(-sunDir, fs_in.normal), 0.0f, 1.0f) * diffuseColor * (1.0f - ambientStrength);
 	vec3 ambient = ambientColor * ambientStrength;
-	vec3 camToFrag = outPos.xyz - cameraPos;
+	vec3 camToFrag = fs_in.position.xyz - cameraPos;
 	FragColor = vec4(ApplyFog(ambient + diffuse, length(camToFrag), cameraPos, normalize(camToFrag)), 1.0f);
 } 
