@@ -51,6 +51,7 @@ bool World::Init()
 
 	glEnable(GL_DEPTH_TEST);
 	glEnable(GL_CULL_FACE);
+	glEnable(GL_MULTISAMPLE);
 
 	return true;
 }
