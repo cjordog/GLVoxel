@@ -121,8 +121,8 @@ private:
 	std::vector<Chunk*> m_frameChunks;
 	glm::mat4 m_projMat;
 
-	FastNoise::SmartNode<FastNoise::FractalFBm> m_noiseGenerator;
-	FastNoise::SmartNode<FastNoise::FractalRidged> m_noiseGeneratorCave;
+	FastNoise::SmartNode<> m_noiseGenerator;
+	FastNoise::SmartNode<> m_noiseGeneratorCave;
 
 	std::mutex testMutex;
 

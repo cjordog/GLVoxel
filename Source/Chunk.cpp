@@ -91,14 +91,12 @@ void Chunk::InitShared(
 	std::unordered_map<std::thread::id, int>& threadIDs,
 	std::function<void(Chunk*)> generateMeshCallback,
 	std::function<void(Chunk*)> renderListCallback,
-	const ChunkGenParams* chunkGenParams,
-	FastNoise::SmartNode<FastNoise::FractalFBm>* terrainNoise,
-	FastNoise::SmartNode<FastNoise::FractalRidged>* caveNoise
+	const ChunkGenParams* chunkGenParams
 )
 {
 	s_threadIDs = threadIDs;
 
-	s_sharedScratchpadMemory = new float[s_threadIDs.size() * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+	s_sharedScratchpadMemory = new float[2 * s_threadIDs.size() * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 
 	s_generateMeshCallback = generateMeshCallback;
 	s_renderListCallback = renderListCallback;
@@ -290,7 +288,7 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 	}
 }
 
-void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave)
+void Chunk::GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::SmartNode<>* noiseGeneratorCave)
 {
 	auto startTime = std::chrono::high_resolution_clock::now();
 
@@ -304,7 +302,8 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE + domainTurbulence * 2;
 	float noiseOutput[turbulentRowSize * turbulentRowSize];
 	float noiseOutput2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
-	float* noiseOutput3 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * s_threadIDs[std::this_thread::get_id()]];
+	float* noiseOutput3D = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * 2 * s_threadIDs[std::this_thread::get_id()]];
+	float* noiseOutput3D2 = &s_sharedScratchpadMemory[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * (2 * s_threadIDs[std::this_thread::get_id()] + 1)];
 	if (!s_chunkGenParams->m_debugFlatWorld)
 	{
 		// samples once per int, so we pass in bigger positions than our actual worldspace position...
@@ -327,8 +326,19 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 			FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
 			1337
 		);
+		noiseGenerator->get()->GenUniformGrid3D(
+			noiseOutput3D2,
+			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale,
+			1337
+		);
 		noiseGeneratorCave->get()->GenUniformGrid3D(
-			noiseOutput3,
+			noiseOutput3D,
 			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
 			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
@@ -360,7 +370,7 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 				{
 					worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
 					noiseVal2 = noiseOutput2[x + INT_CHUNK_VOXEL_SIZE * z];
-					noiseVal3 = noiseOutput3[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+					noiseVal3 = noiseOutput3D[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
 				else
@@ -371,13 +381,14 @@ void Chunk::GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGen
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
 
-				if (worldSpaceHeight > worldSpaceNoiseVal)
+				worldSpaceHeight = noiseOutput3D2[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+				if (worldSpaceHeight > 0.0f)
 				{
 					m_voxelData->m_voxels[x][y][z] = BlockType::Air;
 				}
 				else
 				{
-					if (noiseVal3 > 0.8f)
+					if (noiseVal3 > 0.0f)
 					{
 						m_voxelData->m_voxels[x][y][z] = BlockType::Air;
 					}

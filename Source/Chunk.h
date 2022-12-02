@@ -20,9 +20,9 @@ public:
 	{
 		float caveFrequency = 1;
 		float terrainHeight = 400.0f;
-		float terrainLacunarity = 2.5f;
+		float terrainLacunarity = 3.0f;
 		float terrainGain = 0.4f;
-		float terrainFrequency = 0.16f;
+		float terrainFrequency = 0.1f;
 		int terrainOctaves = 4;
 
 #ifdef DEBUG
@@ -83,9 +83,7 @@ public:
 		std::unordered_map<std::thread::id, int>& threadIDs, 
 		std::function<void(Chunk*)> generateMeshCallback, 
 		std::function<void(Chunk*)> renderListCallback,
-		const ChunkGenParams* chunkGenParams,
-		FastNoise::SmartNode<FastNoise::FractalFBm>* terrainNoise,
-		FastNoise::SmartNode<FastNoise::FractalRidged>* caveNoise
+		const ChunkGenParams* chunkGenParams
 	);
 	static void DeleteShared();
 
@@ -125,7 +123,7 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
-	void GenerateVolume(FastNoise::SmartNode<FastNoise::FractalFBm>* noiseGenerator, FastNoise::SmartNode<FastNoise::FractalRidged>* noiseGeneratorCave);
+	void GenerateVolume(FastNoise::SmartNode<>* noiseGenerator, FastNoise::SmartNode<>* noiseGeneratorCave);
 	void GenerateVolume2();
 	void GenerateMesh();
 	void SetNeedsLODSeam(BlockFace f);

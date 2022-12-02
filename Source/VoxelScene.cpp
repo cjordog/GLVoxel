@@ -37,26 +37,25 @@ VoxelScene::VoxelScene()
 {
 	m_chunks = std::unordered_map<glm::i32vec3, Chunk*>();
 
-	m_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
-	auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
-	m_noiseGenerator->SetSource(fnSimplex);
-	m_noiseGenerator->SetGain(0.1f);
-	m_noiseGenerator->SetLacunarity(10);
-	m_noiseGenerator->SetOctaveCount(3);
+	//m_noiseGenerator = FastNoise::New<FastNoise::FractalFBm>();
+	//auto fnSimplex = FastNoise::New<FastNoise::Simplex>();
+	//m_noiseGenerator->SetSource(fnSimplex);
+	//m_noiseGenerator->SetGain(0.1f);
+	//m_noiseGenerator->SetLacunarity(10);
+	//m_noiseGenerator->SetOctaveCount(3);
+	m_noiseGenerator = FastNoise::NewFromEncodedNodeTree("EQADAAAAAAAAQBAAAAAAPxkADQADAAAAAAAAQAkAAAAAAD8AAAAAAAEEAAAAAABI4TpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAPwAAAAAA");
 
-	m_noiseGeneratorCave = FastNoise::New<FastNoise::FractalRidged>();
-	auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
-	m_noiseGeneratorCave->SetSource(fnSimplex2);
-	m_noiseGeneratorCave->SetOctaveCount(2);
+	m_noiseGeneratorCave = FastNoise::NewFromEncodedNodeTree("DQACAAAAAAAAQBoAAJqZGb8BGwAPAAIAAAAAAABADQACAAAAAAAAQAkAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAACAvwAAAAA/AAAAAAA=");
+	//auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
+	//m_noiseGeneratorCave->SetSource(fnSimplex2);
+	//m_noiseGeneratorCave->SetOctaveCount(2);
 
 	// if we can ever have more than one voxel scene move this.
 	Chunk::InitShared(
 		m_threadPool.GetThreadIDs(),
 		std::bind(&VoxelScene::AddToMeshListCallback, this, std::placeholders::_1),
 		std::bind(&VoxelScene::AddToRenderListCallback, this, std::placeholders::_1),
-		&m_chunkGenParams,
-		&m_noiseGenerator,
-		&m_noiseGeneratorCave
+		&m_chunkGenParams
 	);
 
 	glGenVertexArrays(1, &m_chunkVAO);
@@ -112,12 +111,13 @@ VoxelScene::VoxelScene()
 
 VoxelScene::~VoxelScene()
 {
-	Chunk::DeleteShared();
 	m_threadPool.ClearJobPool();
 	m_threadPool.WaitForAllThreadsFinished();
 
 	for (auto& chunk : m_chunks)
 		delete chunk.second;
+
+	Chunk::DeleteShared();
 }
 
 void VoxelScene::InitShared()
@@ -155,9 +155,9 @@ void VoxelScene::Update(const glm::vec3& position)
 	{
 		m_chunkGenParams = m_chunkGenParamsNext;
 		ResetVoxelScene();
-		m_noiseGenerator->SetLacunarity(m_chunkGenParamsNext.terrainLacunarity);
-		m_noiseGenerator->SetGain(m_chunkGenParamsNext.terrainGain);
-		m_noiseGenerator->SetOctaveCount(m_chunkGenParamsNext.terrainOctaves);
+		//m_noiseGenerator->SetLacunarity(m_chunkGenParamsNext.terrainLacunarity);
+		//m_noiseGenerator->SetGain(m_chunkGenParamsNext.terrainGain);
+		//m_noiseGenerator->SetOctaveCount(m_chunkGenParamsNext.terrainOctaves);
 	}
 	m_frameChunks.clear();
 	std::vector<Chunk*> newChunks;
@@ -779,25 +779,28 @@ void VoxelScene::RenderHitPos(const Camera* camera, const Camera* debugCullCamer
 {
 	s_debugWireframeShaderProgram.Use();
 	glDepthMask(GL_FALSE);
+	glEnable(GL_BLEND);
+	glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 	glBindVertexArray(m_debugWireframeVAO);
 	glBindVertexBuffer(0, m_aabbVBO, 0, sizeof(VertexP));
 	glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, m_aabbEBO);
 
-	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(m_projMat));
+	glUniformMatrix4fv(1, 1, GL_FALSE, glm::value_ptr(camera->GetProjMatrix()));
 
 	glm::mat4x4 modelMat = glm::mat4(1.0f);
 	modelMat = glm::translate(modelMat, hitPos);
 	modelMat = glm::scale(modelMat, glm::vec3(VOXEL_UNIT_SIZE));
 	modelMat = glm::translate(modelMat, glm::vec3(0.5f));
-	modelMat = glm::scale(modelMat, glm::vec3(1.01f));
+	modelMat = glm::scale(modelMat, glm::vec3(1.001f));
 	modelMat = glm::translate(modelMat, glm::vec3(-0.5f));
-	modelMat = glm::scale(modelMat, glm::vec3(float(0.5f / CHUNK_UNIT_SIZE)));
+	modelMat = glm::scale(modelMat, glm::vec3(float(1.0f / CHUNK_UNIT_SIZE)));
 
 	glUniformMatrix4fv(0, 1, GL_FALSE, glm::value_ptr(camera->GetViewMatrix() * modelMat));
 
 	glDrawElements(GL_TRIANGLES, m_aabbIndexCount, GL_UNSIGNED_INT, 0);
 
 	glDepthMask(GL_TRUE);
+	glDisable(GL_BLEND);
 }
 
 #ifdef IMGUI_ENABLED
