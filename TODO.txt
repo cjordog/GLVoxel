@@ -54,3 +54,4 @@ V collision
 - throw some more functionality into GX
 - level saving
 - separate physics stuff out into physics.cpp
+- 3D texture model loading.

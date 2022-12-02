@@ -14,7 +14,6 @@ float smoothstep(float edge0, float edge1, float x) {
 }
 
 static std::unordered_map<std::thread::id, int> s_threadIDs;
-static float* s_sharedScratchpadMemory;
 
 static std::function<void(Chunk*)> s_generateMeshCallback;
 static std::function<void(Chunk*)> s_renderListCallback;
@@ -97,16 +96,12 @@ void Chunk::InitShared(
 )
 {
 	s_threadIDs = threadIDs;
-
-	s_sharedScratchpadMemory = new float[2 * s_threadIDs.size() * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 	s_scratchpadMemory = new ScratchpadMemoryLayout[s_threadIDs.size()];
 
 	s_generateMeshCallback = generateMeshCallback;
 	s_renderListCallback = renderListCallback;
 
 	s_chunkGenParams = chunkGenParams;
-
-	//s_memPool = MemPooler<VoxelData>(15000);
 
 	constexpr uint MAX_FACES = 100000;
 	uint indexCount = MAX_FACES * 6;
@@ -128,7 +123,7 @@ void Chunk::InitShared(
 
 void Chunk::DeleteShared()
 {
-	delete s_sharedScratchpadMemory;
+	delete s_scratchpadMemory;
 	glDeleteBuffers(1, &s_chunkEBO);
 }
 
@@ -139,6 +134,8 @@ inline bool BlockIsOpaque(Chunk::BlockType t)
 	case Chunk::BlockType::Dirt:
 	case Chunk::BlockType::Grass:
 	case Chunk::BlockType::Stone:
+	case Chunk::BlockType::Sand:
+	case Chunk::BlockType::Blue:
 		return true;
 	default: 
 		return false;
@@ -177,6 +174,8 @@ bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
 	case Chunk::BlockType::Dirt:
 	case Chunk::BlockType::Grass:
 	case Chunk::BlockType::Stone:
+	case Chunk::BlockType::Sand:
+	case Chunk::BlockType::Blue:
 		return true;
 	default:
 		return false;
@@ -300,56 +299,62 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 	constexpr float DIRT_HEIGHT = 2.0f;
 	constexpr float FREQUENCY = 1 / 200.f;
 
-	constexpr int domainTurbulence = 0;// 10 * UNIT_VOXEL_RESOLUTION;
-
-	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE + domainTurbulence * 2;
+	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE;
 	ScratchpadMemoryLayout& scratchMem = s_scratchpadMemory[s_threadIDs[std::this_thread::get_id()]];
-	float* noiseOutput2D = scratchMem.noise2D1;
-	float* noiseOutput2D2 = scratchMem.noise2D2;
-	float* noiseOutput3D = scratchMem.noise3D1;
-	float* noiseOutput3D2 = scratchMem.noise3D2;
+
+	glm::ivec3 noiseStartPos = (m_chunkPos - glm::vec3(m_scale)) * float(UNIT_VOXEL_RESOLUTION / m_scale);
+	float frequencyScale = FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale;
 	if (!s_chunkGenParams->m_debugFlatWorld)
 	{
 		// samples once per int, so we pass in bigger positions than our actual worldspace position...
 		generators->noiseGenerator->GenUniformGrid2D(
-			noiseOutput2D,
-			((m_chunkPos.x - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.z - (1 + domainTurbulence) * m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			scratchMem.noise2D1,
+			noiseStartPos.x,
+			noiseStartPos.z,
 			turbulentRowSize,
 			turbulentRowSize,
-			FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale * s_chunkGenParams->terrainFrequency,
+			frequencyScale * s_chunkGenParams->terrainFrequency,
 			1
 		);
 		// this is kinda overkill for just the dirt
 		generators->noiseGenerator->GenUniformGrid2D(
-			noiseOutput2D2,
-			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			scratchMem.noise2D2,
+			noiseStartPos.x,
+			noiseStartPos.z,
 			INT_CHUNK_VOXEL_SIZE,
 			INT_CHUNK_VOXEL_SIZE,
-			FREQUENCY / UNIT_VOXEL_RESOLUTION * 20 * m_scale,
+			frequencyScale * 20,
+			1337
+		);
+		generators->biomeGenerator->GenUniformGrid2D(
+			scratchMem.noise2D3,
+			noiseStartPos.x,
+			noiseStartPos.z,
+			INT_CHUNK_VOXEL_SIZE,
+			INT_CHUNK_VOXEL_SIZE,
+			frequencyScale,
 			1337
 		);
 		generators->noiseGenerator->GenUniformGrid3D(
-			noiseOutput3D2,
-			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			scratchMem.noise3D1,
+			noiseStartPos.x,
+			noiseStartPos.y,
+			noiseStartPos.z,
 			INT_CHUNK_VOXEL_SIZE,
 			INT_CHUNK_VOXEL_SIZE,
 			INT_CHUNK_VOXEL_SIZE,
-			FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale,
+			frequencyScale,
 			1337
 		);
 		generators->noiseGeneratorCave->GenUniformGrid3D(
-			noiseOutput3D,
-			((m_chunkPos.x - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.y - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
-			((m_chunkPos.z - m_scale) * UNIT_VOXEL_RESOLUTION) / m_scale,
+			scratchMem.noise3D2,
+			noiseStartPos.x,
+			noiseStartPos.y,
+			noiseStartPos.z,
 			INT_CHUNK_VOXEL_SIZE,
 			INT_CHUNK_VOXEL_SIZE,
 			INT_CHUNK_VOXEL_SIZE,
-			FREQUENCY / UNIT_VOXEL_RESOLUTION * s_chunkGenParams->caveFrequency * m_scale,
+			frequencyScale * s_chunkGenParams->caveFrequency,
 			1337
 		);
 	}
@@ -364,18 +369,13 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 			for (int x = 0; x < INT_CHUNK_VOXEL_SIZE; x++)
 			{
 				// this can be one level up. move y inwards
-				//float noiseVal3D = noiseOutput3D[x + CHUNK_VOXEL_SIZE * y + CHUNK_VOXEL_SIZE * CHUNK_VOXEL_SIZE * z];
-				float noiseVal3D = 0;
-				int indexOffset = turbulentRowSize * domainTurbulence + domainTurbulence;
-				int index = int(x + noiseVal3D * domainTurbulence) + int(z + noiseVal3D * domainTurbulence) * turbulentRowSize + indexOffset;
-
 				float worldSpaceNoiseVal, noiseVal2, noiseVal3, dirtHeight;
 				if (!s_chunkGenParams->m_debugFlatWorld)
 				{
-					worldSpaceNoiseVal = (noiseOutput2D[index] + 1) * 0.5f * TERRAIN_HEIGHT;
+					worldSpaceNoiseVal = (scratchMem.noise2D1[x + z * INT_CHUNK_VOXEL_SIZE] + 1) * 0.5f * TERRAIN_HEIGHT;
 					//worldSpaceNoiseVal = smoothstep(-1, 1, noiseOutput[index]) * TERRAIN_HEIGHT;
-					noiseVal2 = noiseOutput2D2[x + INT_CHUNK_VOXEL_SIZE * z];
-					noiseVal3 = noiseOutput3D[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+					noiseVal2 = scratchMem.noise2D2[x + INT_CHUNK_VOXEL_SIZE * z];
+					noiseVal3 = scratchMem.noise3D2[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
 				else
@@ -386,7 +386,22 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
 
-				worldSpaceHeight = noiseOutput3D2[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+				float biome = scratchMem.noise2D3[x + z * INT_CHUNK_VOXEL_SIZE];
+				BlockType biomeBlock = BlockType::Blue;
+				if (biome < -0.2f)
+				{
+					biomeBlock = BlockType::Blue;
+				}
+				else if (biome < 0.3f)
+				{
+					biomeBlock = BlockType::Grass;
+				}
+				else
+				{
+					biomeBlock = BlockType::Sand;
+				}
+
+				worldSpaceHeight = scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
 				if (worldSpaceHeight > 0.0f)
 				{
 					m_voxelData->m_voxels[x][y][z] = BlockType::Air;
@@ -399,13 +414,14 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 					}
 					else
 					{
-						m_voxelData->m_voxels[x][y][z] = BlockType::Grass;
+						m_voxelData->m_voxels[x][y][z] = biomeBlock;
 
-						float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION / m_scale;
-						if (depth >= 0.0f && depth < 1.0f)
-							m_voxelData->m_voxels[x][y][z] = BlockType::Grass;
-						else if (depth < dirtHeight + 1)
-							m_voxelData->m_voxels[x][y][z] = BlockType::Dirt;
+						//float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION / m_scale;
+						float depth = (scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * (y + 1) + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z] < 0.0f) + 1;
+						if (depth >= 0.0f && depth <= 1.0f)
+							m_voxelData->m_voxels[x][y][z] = biomeBlock;
+						//else if (depth < dirtHeight + 1)
+						//	m_voxelData->m_voxels[x][y][z] = BlockType::Dirt;
 						else
 							m_voxelData->m_voxels[x][y][z] = BlockType::Stone;
 						emptyVal = 0;

@@ -45,6 +45,7 @@ VoxelScene::VoxelScene()
 	//m_noiseGenerator->SetOctaveCount(3);
 	m_noiseGenerators.noiseGenerator = FastNoise::NewFromEncodedNodeTree("EQADAAAAAAAAQBAAAAAAPxkADQADAAAAAAAAQAkAAAAAAD8AAAAAAAEEAAAAAABI4TpAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAgD8AAAAAPwAAAAAA");
 	m_noiseGenerators.noiseGeneratorCave = FastNoise::NewFromEncodedNodeTree("DQACAAAAAAAAQBoAAJqZGb8BGwAPAAIAAAAAAABADQACAAAAAAAAQAkAAAAAAD8AAAAAAAAAAAA/AAAAAAAAAACAvwAAAAA/AAAAAAA=");
+	m_noiseGenerators.biomeGenerator = FastNoise::NewFromEncodedNodeTree("CgADAAAAAAAAAAAAAIA/");
 	//auto fnSimplex2 = FastNoise::New<FastNoise::Simplex>();
 	//m_noiseGeneratorCave->SetSource(fnSimplex2);
 	//m_noiseGeneratorCave->SetOctaveCount(2);

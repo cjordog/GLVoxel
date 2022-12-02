@@ -61,6 +61,8 @@ public:
 		Dirt,
 		Grass,
 		Stone,
+		Sand,
+		Blue,
 	};
 
 	enum ChunkState : uint16_t
@@ -83,6 +85,7 @@ public:
 	{
 		FastNoise::SmartNode<> noiseGenerator; 
 		FastNoise::SmartNode<> noiseGeneratorCave;
+		FastNoise::SmartNode<> biomeGenerator;
 	};
 
 	static void InitShared(
@@ -147,8 +150,9 @@ public:
 	{
 		float noise3D1[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 		float noise3D2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
-		float noise2D1[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
-		float noise2D2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise2D1[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise2D2[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
+		float noise2D3[INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE];
 	};
 	static ScratchpadMemoryLayout* s_scratchpadMemory;
 
