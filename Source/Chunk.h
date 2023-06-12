@@ -132,6 +132,12 @@ public:
 	bool UpdateNeighborRef(BlockFace face, Chunk* neighbor);
 	bool UpdateNeighborRefNewChunk(BlockFace face, Chunk* neighbor);
 	void NotifyNeighborOfVolumeGeneration(BlockFace neighbor);
+	void GetNoiseGenPos(
+		const glm::vec3& chunkPos, 
+		const glm::vec3& pos,
+		const uint lod, 
+		glm::ivec3& noisePos, 
+		float& frequency);
 	void GenerateVolume(const ChunkNoiseGenerators* generators);
 	void GenerateVolume2();
 	void GenerateMesh();
@@ -140,6 +146,7 @@ public:
 
 	bool IsInFrustum(const Frustum& f) const;
 
+	// worldspace chunk pos. bottom most corner
 	glm::vec3 m_chunkPos = glm::vec3(0, 0, 0);
 
 	std::mutex m_mutex;

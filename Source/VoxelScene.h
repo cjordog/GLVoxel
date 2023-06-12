@@ -64,6 +64,7 @@ public:
 
 	void AddToMeshListCallback(Chunk* chunk);
 	void AddToRenderListCallback(Chunk* chunk);
+	void LogVector(const glm::vec3& v);
 
 	struct ImguiData
 	{

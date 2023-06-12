@@ -290,6 +290,23 @@ void Chunk::NotifyNeighborOfVolumeGeneration(BlockFace neighbor)
 	}
 }
 
+void Chunk::GetNoiseGenPos(
+	const glm::vec3& chunkPos,
+	const glm::vec3& pos,
+	const uint lod, 
+	glm::ivec3& noisePos, 
+	float& frequency)
+{
+	// could this be from float to int conversion issues?
+	// why is this +1? idk it works though? should probably actually sort out the math at some point.
+	//noisePos = (chunkPos / float(1u << lod) + glm::vec3(pos.x - 1, pos.y - 1, pos.z - 1)) * float(UNIT_VOXEL_RESOLUTION) + float(1);
+	//frequency = float(1u << lod) / UNIT_VOXEL_RESOLUTION;
+	const float s = float(1u << lod);
+	const float f = UNIT_VOXEL_RESOLUTION / s;
+	noisePos = ((chunkPos + pos * s - s) * f) + 1.0f;
+	frequency = 1 / f;
+}
+
 void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 {
 	auto startTime = std::chrono::high_resolution_clock::now();
@@ -302,8 +319,10 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE;
 	ScratchpadMemoryLayout& scratchMem = s_scratchpadMemory[s_threadIDs[std::this_thread::get_id()]];
 
-	glm::ivec3 noiseStartPos = (m_chunkPos - glm::vec3(m_scale)) * float(UNIT_VOXEL_RESOLUTION / m_scale);
-	float frequencyScale = FREQUENCY / UNIT_VOXEL_RESOLUTION * m_scale;
+	glm::ivec3 noiseStartPos;
+	float frequencyScale;
+	GetNoiseGenPos(m_chunkPos, glm::vec3(0), m_LOD, noiseStartPos, frequencyScale);
+	frequencyScale *= FREQUENCY;
 	if (!s_chunkGenParams->m_debugFlatWorld)
 	{
 		// samples once per int, so we pass in bigger positions than our actual worldspace position...
@@ -359,15 +378,25 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 		);
 	}
 
-	bool emptyVal = 1;
-	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?
+	bool emptyVal = true;
+	bool fullVal = true;
+	bool isEdge = false;
+	// would putting y on the inside be faster? what if y was the inner most index on the 3d array?. 
+	// going top down could also aid in grass gen if we put y on inside
 	for (int z = 0; z < INT_CHUNK_VOXEL_SIZE; z++)
 	{
+		int zEdge = (z == 0) ? 1 : (z == INT_CHUNK_VOXEL_SIZE - 1) ? -1 : 0;
 		for (int y = 0; y < INT_CHUNK_VOXEL_SIZE; y++)
 		{
+			int yEdge = (y == 0) ? 1 : (y == INT_CHUNK_VOXEL_SIZE - 1) ? -1 : 0;
 			float worldSpaceHeight = (y - 1) * m_scale * VOXEL_UNIT_SIZE + m_chunkPos.y;
 			for (int x = 0; x < INT_CHUNK_VOXEL_SIZE; x++)
 			{
+				int xEdge = (x == 0) ? 1 : (x == INT_CHUNK_VOXEL_SIZE - 1) ? -1 : 0;
+				// dont do wasted work for corners. xor
+				isEdge = (xEdge != 0 && yEdge == 0 && zEdge == 0) ||
+					(xEdge == 0 && yEdge != 0 && zEdge == 0) ||
+					(xEdge == 0 && yEdge == 0 && zEdge != 0);
 				// this can be one level up. move y inwards
 				float worldSpaceNoiseVal, noiseVal2, noiseVal3, dirtHeight;
 				if (!s_chunkGenParams->m_debugFlatWorld)
@@ -385,7 +414,7 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 					noiseVal3 = 0;
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
-
+				BlockType blockType = BlockType::Air;
 				float biome = scratchMem.noise2D3[x + z * INT_CHUNK_VOXEL_SIZE];
 				BlockType biomeBlock = BlockType::Blue;
 				if (biome < -0.2f)
@@ -404,13 +433,17 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 				worldSpaceHeight = scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
 				if (worldSpaceHeight > 0.0f)
 				{
+					blockType = BlockType::Air;
 					m_voxelData->m_voxels[x][y][z] = BlockType::Air;
+					fullVal = false;
 				}
 				else
 				{
 					if (noiseVal3 > 0.0f)
 					{
+						blockType = BlockType::Air;
 						m_voxelData->m_voxels[x][y][z] = BlockType::Air;
+						fullVal = false;
 					}
 					else
 					{
@@ -419,14 +452,76 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 						//float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION / m_scale;
 						float depth = (scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * (y + 1) + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z] < 0.0f) + 1;
 						if (depth >= 0.0f && depth <= 1.0f)
-							m_voxelData->m_voxels[x][y][z] = biomeBlock;
+							blockType = biomeBlock;
 						//else if (depth < dirtHeight + 1)
 						//	m_voxelData->m_voxels[x][y][z] = BlockType::Dirt;
 						else
-							m_voxelData->m_voxels[x][y][z] = BlockType::Stone;
-						emptyVal = 0;
+							blockType = BlockType::Stone;
+						emptyVal = false;
 					}
 				}
+				// generate skirts for lod seams. this is rough and dirty.
+				// should be blockType != (any transparency)
+				if (m_LOD != 0 && blockType != BlockType::Air && isEdge)
+				{
+					glm::vec3 offset1, offset2;
+					glm::vec3 lodPos = glm::max(glm::vec3(x, y, z) * 2.0f - 1.0f, glm::vec3(0));
+					if (xEdge != 0)
+					{
+						offset1 = { 0, 1, 0 };
+						offset2 = { 0, 0, 1 };
+						if (xEdge == 1)
+							lodPos.x = 0;
+						else
+							lodPos.x = 2 * x;
+					}
+					if (yEdge != 0)
+					{
+						offset1 = { 1, 0, 0 };
+						offset2 = { 0, 0, 1 };
+						if (yEdge == 1)
+							lodPos.y = 0;
+						else
+							lodPos.y = 2 * y;
+					}
+					if (zEdge != 0)
+					{
+						offset1 = { 0, 1, 0 };
+						offset2 = { 1, 0, 0 };
+						if (zEdge == 1)
+							lodPos.z = 0;
+						else
+							lodPos.z = 2 * z;
+					}
+
+					glm::ivec3 newNoiseStartPos;
+					float frequencyScale;
+					GetNoiseGenPos(m_chunkPos, lodPos, m_LOD - 1, newNoiseStartPos, frequencyScale);
+					frequencyScale *= FREQUENCY;
+					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
+					{
+						blockType = BlockType::Air;
+					}
+					GetNoiseGenPos(m_chunkPos, lodPos + offset1, m_LOD - 1, newNoiseStartPos, frequencyScale);
+					frequencyScale *= FREQUENCY;
+					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
+					{
+						blockType = BlockType::Air;
+					}
+					GetNoiseGenPos(m_chunkPos, lodPos + offset2, m_LOD - 1, newNoiseStartPos, frequencyScale);
+					frequencyScale *= FREQUENCY;
+					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
+					{
+						blockType = BlockType::Air;
+					}
+					GetNoiseGenPos(m_chunkPos, lodPos + offset1 + offset2, m_LOD - 1, newNoiseStartPos, frequencyScale);
+					frequencyScale *= FREQUENCY;
+					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
+					{
+						blockType = BlockType::Air;
+					}
+				}
+				m_voxelData->m_voxels[x][y][z] = blockType;
 			}
 		}
 	}	

@@ -56,4 +56,5 @@ V collision
 - separate physics stuff out into physics.cpp
 - 3D texture model loading.
 - maybe only generate new chunks that are immediately in the frustum?
-- experiment with variable length lod in z direction, seems more important to have in x and y?
+- experiment with variable length lod in up direction, seems more important to have in x and z?
+- LOD generation might be offset in y, i think LODS might be generating higher up the higher the LOD

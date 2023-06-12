@@ -626,22 +626,28 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 	if (currChunk == nullptr || !currChunk->IsDeletable() || currChunk->GetLOD() != 0)
 		return false;
 
+	//fprintf(stderr, "%f %f %f\n", ray.dir.x, ray.dir.y, ray.dir.z);
+
 	glm::i32vec3 voxelIndex;
 	bool ret = currChunk->GetVoxelIndexAtWorldPos(ray.origin, voxelIndex);
-	const int stepX = ray.dir.x > 0 ? 1 : (ray.dir.x < 0 ? -1 : 0);
-	const int stepY = ray.dir.y > 0 ? 1 : (ray.dir.y < 0 ? -1 : 0);
-	const int stepZ = ray.dir.z > 0 ? 1 : (ray.dir.z < 0 ? -1 : 0);
-	const glm::i32vec3 step(stepX, stepY, stepZ);
+	const glm::vec3 step = glm::sign(ray.dir);
+	//const int stepX = ray.dir.x > 0 ? 1 : (ray.dir.x < 0 ? -1 : 0);
+	//const int stepY = ray.dir.y > 0 ? 1 : (ray.dir.y < 0 ? -1 : 0);
+	//const int stepZ = ray.dir.z > 0 ? 1 : (ray.dir.z < 0 ? -1 : 0);
+	//const glm::i32vec3 step(stepX, stepY, stepZ);
 
-	const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.x), 0.000001f);
-	const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.y), 0.000001f);
-	const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.z), 0.000001f);
+	const glm::vec3 tDelta = VOXEL_UNIT_SIZE / glm::max(glm::abs(ray.dir), 0.000001f);
+	//const float tDeltaX = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.x), 0.000001f);
+	//const float tDeltaY = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.y), 0.000001f);
+	//const float tDeltaZ = VOXEL_UNIT_SIZE / std::max(std::abs(ray.dir.z), 0.000001f);
 
-	glm::vec3 voxelBorder = glm::vec3(voxelIndex + glm::max(step, 0)) * VOXEL_UNIT_SIZE;
+	glm::vec3 voxelBorder = (glm::vec3(voxelIndex) + glm::max(step, 0.0f)) * VOXEL_UNIT_SIZE;
 	glm::vec3 tMax = (voxelBorder - (ray.origin - currChunk->GetChunkPos()));
-	tMax.x = ray.dir.x != 0.0f ? tMax.x / std::abs(ray.dir.x) : 1000000.f;
-	tMax.y = ray.dir.y != 0.0f ? tMax.y / std::abs(ray.dir.y) : 1000000.f;
-	tMax.z = ray.dir.z != 0.0f ? tMax.z / std::abs(ray.dir.z) : 1000000.f;
+	tMax.x = ray.dir.x != 0.0f ? tMax.x / (ray.dir.x) : 1000000.f;
+	tMax.y = ray.dir.y != 0.0f ? tMax.y / (ray.dir.y) : 1000000.f;
+	tMax.z = ray.dir.z != 0.0f ? tMax.z / (ray.dir.z) : 1000000.f;
+
+	//LogVector(voxelIndex);
 
 	bool exitedChunk = false;
 	float lastT = 0;
@@ -652,17 +658,17 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 		{
 			if (tMax.x < tMax.z)
 			{
-				voxelIndex.x += stepX;
+				voxelIndex.x += step.x;
 				exitedChunk = (voxelIndex.x >= CHUNK_VOXEL_SIZE || voxelIndex.x < 0);
 				lastT = tMax.x;
-				tMax.x += tDeltaX;
+				tMax.x += tDelta.x;
 			}
 			else
 			{
-				voxelIndex.z += stepZ;
+				voxelIndex.z += step.z;
 				exitedChunk = (voxelIndex.z >= CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
 				lastT = tMax.z;
-				tMax.z += tDeltaZ;
+				tMax.z += tDelta.z;
 
 			}
 		}
@@ -670,17 +676,17 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 		{
 			if (tMax.y < tMax.z)
 			{
-				voxelIndex.y += stepY;
+				voxelIndex.y += step.y;
 				exitedChunk = (voxelIndex.y >= CHUNK_VOXEL_SIZE || voxelIndex.y < 0);
 				lastT = tMax.y;
-				tMax.y += tDeltaY;
+				tMax.y += tDelta.t;
 			}
 			else 
 			{
-				voxelIndex.z += stepZ;
+				voxelIndex.z += step.z;
 				exitedChunk = (voxelIndex.z >= CHUNK_VOXEL_SIZE || voxelIndex.z < 0);
 				lastT = tMax.z;
-				tMax.z += tDeltaZ;
+				tMax.z += tDelta.z;
 			}
 		}
 		if (exitedChunk)
@@ -694,9 +700,6 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 			exitedChunk = false;
 		}
 	}
-	hitPos = currChunk->GetChunkPos() + (glm::vec3(voxelIndex)/* + glm::vec3(0.5f)*/) * VOXEL_UNIT_SIZE;
-	//if (collided)
-	//	fprintf(stderr, "hit block type %d\n", uint8_t(currChunk->GetBlockType(voxelIndex.x, voxelIndex.y, voxelIndex.z)));
 	if (collided)
 	{
 		voxelRayHit = 
@@ -836,6 +839,11 @@ void VoxelScene::AddToRenderListCallback(Chunk* chunk)
 {
 	std::lock_guard lock(m_renderCallbackListMutex);
 	m_renderCallbackList.push_back(chunk);
+}
+
+void VoxelScene::LogVector(const glm::vec3& v)
+{
+	fprintf(stderr, "%f %f %f\n", float(v.x), float(v.y), float(v.z));
 }
 
 #ifdef DEBUG
