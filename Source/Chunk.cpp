@@ -4,6 +4,9 @@
 #include "glm/gtc/noise.hpp"
 #include <algorithm>
 #include "MemPooler.h"
+#include <cassert>
+#include <glm/vector_relational.hpp>
+#include <chrono>
 //#include <Tracy.hpp>
 
 float smoothstep(float edge0, float edge1, float x) {
@@ -20,8 +23,8 @@ static std::function<void(Chunk*)> s_renderListCallback;
 
 static const Chunk::ChunkGenParams* s_chunkGenParams = nullptr;
 
-// can solve for this inital value
-static MemPooler<Chunk::VoxelData> s_memPool(30000);
+// allocates voxel data in fixed blocks of this many chunks. blocks never move, so pointers stay valid as the pool grows.
+static MemPooler<Chunk::VoxelData> s_memPool(128);
 
 static std::vector<uint> s_chunkIndices;
 uint s_chunkEBO = 0;
@@ -96,6 +99,10 @@ void Chunk::InitShared(
 )
 {
 	s_threadIDs = threadIDs;
+	// give the calling (main) thread its own scratchpad too. it runs generation jobs itself when
+	// multithreading is disabled, and must never share a slot with a worker.
+	const int mainThreadSlot = int(s_threadIDs.size());
+	s_threadIDs[std::this_thread::get_id()] = mainThreadSlot;
 	s_scratchpadMemory = new ScratchpadMemoryLayout[s_threadIDs.size()];
 
 	s_generateMeshCallback = generateMeshCallback;
@@ -123,7 +130,8 @@ void Chunk::InitShared(
 
 void Chunk::DeleteShared()
 {
-	delete s_scratchpadMemory;
+	delete[] s_scratchpadMemory;
+	s_scratchpadMemory = nullptr;
 	glDeleteBuffers(1, &s_chunkEBO);
 }
 
@@ -159,14 +167,14 @@ inline glm::vec3 GetBlockColor(Chunk::BlockType t)
 
 Chunk::BlockType Chunk::GetBlockType(uint x, uint y, uint z) const
 {
-	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE)
+	if (x >= CHUNK_VOXEL_SIZE || y >= CHUNK_VOXEL_SIZE || z >= CHUNK_VOXEL_SIZE || !m_voxelData)
 		return BlockType::Air;
 	return m_voxelData->m_voxels[x + 1][y + 1][z + 1];
 }
 
 bool Chunk::VoxelIsCollideable(const glm::i32vec3& index) const
 {
-	if (m_empty)
+	if (m_empty || !m_voxelData)
 		return false;
 	const glm::i32vec3 intIndex = index + glm::i32vec3(1);
 	switch (m_voxelData->m_voxels[intIndex.x][intIndex.y][intIndex.z])
@@ -204,6 +212,8 @@ Chunk::BlockType Chunk::GetBlockTypeAtWorldPos(const glm::vec3& worldPos)
 {
 	glm::i32vec3 voxelIndex = (worldPos - m_chunkPos) * float(UNIT_VOXEL_RESOLUTION);
 	voxelIndex += glm::i32vec3(1);
+	if (!m_voxelData || glm::any(glm::lessThan(voxelIndex, glm::i32vec3(0))) || glm::any(glm::greaterThanEqual(voxelIndex, glm::i32vec3(INT_CHUNK_VOXEL_SIZE))))
+		return BlockType::Air;
 	return m_voxelData->m_voxels[voxelIndex.x][voxelIndex.y][voxelIndex.z];
 }
 
@@ -214,16 +224,24 @@ bool Chunk::ReadyForMeshGeneration() const
 
 void Chunk::DeleteBlockAtIndex(const glm::i8vec3& index)
 {
+	// empty chunks have freed their voxel data; everything is already air
+	if (!m_voxelData)
+		return;
 	m_voxelData->m_voxels[index.x + 1][index.y + 1][index.z + 1] = BlockType::Air;
 }
 
 void Chunk::DeleteBlockAtInternalIndex(const glm::i8vec3& index)
 {
+	if (!m_voxelData)
+		return;
 	m_voxelData->m_voxels[index.x][index.y][index.z] = BlockType::Air;
 }
 
 void Chunk::ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b)
 {
+	// TODO:: placing into an empty chunk needs it to allocate voxel data first
+	if (!m_voxelData)
+		return;
 	m_voxelData->m_voxels[index.x + 1][index.y + 1][index.z + 1] = b;
 }
 
@@ -246,7 +264,13 @@ void Chunk::Render(RenderSettings::DrawMode drawMode)
 		m_vertices.clear();
 		m_vertices.resize(0);
 		m_buffersGenerated = true;
-		m_state = ChunkState::Done;
+	}
+	// only promote once the worker has published GeneratingBuffers. never touch the state while
+	// it's still GeneratingMesh, since the worker's final state store expects to see that value.
+	if (m_buffersGenerated)
+	{
+		ChunkState expected = ChunkState::GeneratingBuffers;
+		m_state.compare_exchange_strong(expected, ChunkState::Done);
 	}
 	glBindVertexBuffer(0, m_VBO, 0, sizeof(uint));
 	// this only needs to be bound once
@@ -317,7 +341,8 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 	constexpr float FREQUENCY = 1 / 200.f;
 
 	const int turbulentRowSize = INT_CHUNK_VOXEL_SIZE;
-	ScratchpadMemoryLayout& scratchMem = s_scratchpadMemory[s_threadIDs[std::this_thread::get_id()]];
+	// .at() rather than [] so we never insert into a map other threads are reading
+	ScratchpadMemoryLayout& scratchMem = s_scratchpadMemory[s_threadIDs.at(std::this_thread::get_id())];
 
 	glm::ivec3 noiseStartPos;
 	float frequencyScale;
@@ -378,6 +403,16 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 		);
 	}
 
+	const bool flatWorld = s_chunkGenParams->m_debugFlatWorld;
+	// > 0 is air, <= 0 is solid. in flat world mode the noise buffers are never filled, so use the
+	// voxel's world space height instead of reading whatever was left in the scratchpad.
+	auto density = [&](int x, int y, int z) -> float
+	{
+		if (flatWorld)
+			return (y - 1) * m_scale * VOXEL_UNIT_SIZE + m_chunkPos.y;
+		return scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+	};
+
 	bool emptyVal = true;
 	bool fullVal = true;
 	bool isEdge = false;
@@ -415,7 +450,7 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 					dirtHeight = (noiseVal2 + 1.0f) * 0.5f * DIRT_HEIGHT;
 				}
 				BlockType blockType = BlockType::Air;
-				float biome = scratchMem.noise2D3[x + z * INT_CHUNK_VOXEL_SIZE];
+				float biome = flatWorld ? 0.0f : scratchMem.noise2D3[x + z * INT_CHUNK_VOXEL_SIZE];
 				BlockType biomeBlock = BlockType::Blue;
 				if (biome < -0.2f)
 				{
@@ -430,7 +465,7 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 					biomeBlock = BlockType::Sand;
 				}
 
-				worldSpaceHeight = scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * y + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z];
+				worldSpaceHeight = density(x, y, z);
 				if (worldSpaceHeight > 0.0f)
 				{
 					blockType = BlockType::Air;
@@ -450,7 +485,9 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 						m_voxelData->m_voxels[x][y][z] = biomeBlock;
 
 						//float depth = (worldSpaceNoiseVal - worldSpaceHeight) * UNIT_VOXEL_RESOLUTION / m_scale;
-						float depth = (scratchMem.noise3D1[x + INT_CHUNK_VOXEL_SIZE * (y + 1) + INT_CHUNK_VOXEL_SIZE * INT_CHUNK_VOXEL_SIZE * z] < 0.0f) + 1;
+					// is the voxel above solid? the top padding row has nothing above it, so reuse itself.
+					const int yAbove = std::min(y + 1, INT_CHUNK_VOXEL_SIZE - 1);
+					float depth = (density(x, yAbove, z) < 0.0f) + 1;
 						if (depth >= 0.0f && depth <= 1.0f)
 							blockType = biomeBlock;
 						//else if (depth < dirtHeight + 1)
@@ -462,7 +499,7 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 				}
 				// generate skirts for lod seams. this is rough and dirty.
 				// should be blockType != (any transparency)
-				if (m_LOD != 0 && blockType != BlockType::Air && isEdge)
+				if (m_LOD != 0 && blockType != BlockType::Air && isEdge && !flatWorld)
 				{
 					glm::vec3 offset1, offset2;
 					glm::vec3 lodPos = glm::max(glm::vec3(x, y, z) * 2.0f - 1.0f, glm::vec3(0));
@@ -494,31 +531,22 @@ void Chunk::GenerateVolume(const ChunkNoiseGenerators* generators)
 							lodPos.z = 2 * z;
 					}
 
-					glm::ivec3 newNoiseStartPos;
-					float frequencyScale;
-					GetNoiseGenPos(m_chunkPos, lodPos, m_LOD - 1, newNoiseStartPos, frequencyScale);
-					frequencyScale *= FREQUENCY;
-					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
+					// sample the next finer lod at the 4 voxels that make up this face. GenUniformGrid scales
+					// its integer positions by the frequency, but GenSingle3D takes raw coordinates, so the
+					// frequency has to be applied here or the samples come from a completely different spot.
+					const glm::vec3 lodOffsets[4] = { glm::vec3(0), offset1, offset2, offset1 + offset2 };
+					for (const glm::vec3& lodOffset : lodOffsets)
 					{
-						blockType = BlockType::Air;
-					}
-					GetNoiseGenPos(m_chunkPos, lodPos + offset1, m_LOD - 1, newNoiseStartPos, frequencyScale);
-					frequencyScale *= FREQUENCY;
-					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
-					{
-						blockType = BlockType::Air;
-					}
-					GetNoiseGenPos(m_chunkPos, lodPos + offset2, m_LOD - 1, newNoiseStartPos, frequencyScale);
-					frequencyScale *= FREQUENCY;
-					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
-					{
-						blockType = BlockType::Air;
-					}
-					GetNoiseGenPos(m_chunkPos, lodPos + offset1 + offset2, m_LOD - 1, newNoiseStartPos, frequencyScale);
-					frequencyScale *= FREQUENCY;
-					if (generators->noiseGenerator->GenSingle3D(newNoiseStartPos.x, newNoiseStartPos.y, newNoiseStartPos.z, 1337) > 0.0f)
-					{
-						blockType = BlockType::Air;
+						glm::ivec3 lodNoisePos;
+						float lodFrequency;
+						GetNoiseGenPos(m_chunkPos, lodPos + lodOffset, m_LOD - 1, lodNoisePos, lodFrequency);
+						lodFrequency *= FREQUENCY;
+						const glm::vec3 samplePos = glm::vec3(lodNoisePos) * lodFrequency;
+						if (generators->noiseGenerator->GenSingle3D(samplePos.x, samplePos.y, samplePos.z, 1337) > 0.0f)
+						{
+							blockType = BlockType::Air;
+							break;
+						}
 					}
 				}
 				m_voxelData->m_voxels[x][y][z] = blockType;
@@ -549,13 +577,16 @@ void Chunk::GenerateMesh()
 	std::unique_lock lock(m_mutex);
 	if (IsEmpty())
 	{
+		// unlock before publishing Done: once the state is deletable the main thread may free
+		// this chunk, so the state store has to be the last thing we touch.
+		lock.unlock();
 		m_state = ChunkState::Done;
 		return;
 	}
 
 	if (!m_generated.load())
 	{
-		assert(1);
+		assert(false);
 		return;
 	}
 
@@ -580,31 +611,41 @@ void Chunk::GenerateMesh()
 	//}
 
 	lock.lock();
-	
+
+	ChunkState finalState;
 	if (m_vertexCount == 0)
 	{
-		m_noGeo = 1;
-		m_state = ChunkState::Done;
+		m_noGeo = true;
+		finalState = ChunkState::Done;
 	}
 	else
 	{
-		m_state = ChunkState::GeneratingBuffers;
+		finalState = ChunkState::GeneratingBuffers;
 	}
 
-	m_meshGenerated = 1;
-
-	m_renderable = (!IsEmpty() && !IsNoGeo() && (m_state == ChunkState::Done || m_state == ChunkState::GeneratingBuffers));
-
-	lock.unlock();
-
-	if (m_renderable)
-		s_renderListCallback(this);
-
+	// must be reset before m_renderable is published, otherwise the main thread can upload
+	// the buffers, set this to true, and then have us stomp it back to false (re-uploading
+	// from an already cleared m_vertices).
 	m_buffersGenerated = false;
+	m_meshGenerated = true;
+
+	const bool renderable = !IsEmpty() && !IsNoGeo();
 
 	auto endTime = std::chrono::high_resolution_clock::now();
 	std::chrono::duration<double, std::milli> time = endTime - startTime;
 	m_genTime += time.count();
+
+	lock.unlock();
+
+	if (renderable)
+		s_renderListCallback(this);
+
+	m_renderable = renderable;
+	// last touch. after this the chunk is deletable and may be freed by the main thread.
+	// the main thread may already have uploaded the buffers and moved us to Done in the
+	// moment since m_renderable was published, so don't move the state backwards.
+	ChunkState expected = ChunkState::GeneratingMesh;
+	m_state.compare_exchange_strong(expected, finalState);
 }
 
 void Chunk::SetNeedsLODSeam(BlockFace f)

@@ -257,27 +257,26 @@ void Octree::AddChildrenToVector(std::shared_ptr<OctreeNode> node, std::vector<C
 	}
 }
 
+// a subtree is finished when every leaf has a fully generated chunk, and no interior node has a
+// chunk that is still being worked on. interior nodes are allowed to have no chunk at all: their
+// coarse chunk gets deleted once their children are ready (see GenerateFromPosition), and
+// previously that made the subtree count as unfinished forever, so it could never be collapsed
+// back into the parent lod.
 bool Octree::HasFinishedSubtree(std::shared_ptr<OctreeNode> node)
 {
 	//ZoneScoped;
-	if (node->m_chunk && node->m_chunk->IsDeletable())
+	if (node->m_children[0] == nullptr)
 	{
-		if (node->m_children[0] == nullptr)
-		{
-			return true;
-		}
-		else
-		{
-			for (uint i = 0; i < 8; i++)
-			{
-				if (!HasFinishedSubtree(node->m_children[i]))
-					return false;
-			}
-		}
+		return node->m_chunk && node->m_chunk->IsDeletable();
 	}
-	else
-	{
+
+	if (node->m_chunk && !node->m_chunk->IsDeletable())
 		return false;
+
+	for (uint i = 0; i < 8; i++)
+	{
+		if (!HasFinishedSubtree(node->m_children[i]))
+			return false;
 	}
 	return true;
 }

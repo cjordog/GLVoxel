@@ -35,6 +35,9 @@ int main()
 	{
 		return -1;
 	}
+	// scoped so World (and the GL objects / worker threads it owns) is destroyed while the
+	// GL context still exists, before glfwTerminate
+	{
 	Input input(&window);
 	World world;
 	World::InitShared();
@@ -75,6 +78,7 @@ int main()
 	ImGui_ImplGlfw_Shutdown();
 	ImGui::DestroyContext();
 #endif
+	}
 
 	glfwTerminate();
 	return 0;

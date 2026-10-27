@@ -116,6 +116,10 @@ VoxelScene::~VoxelScene()
 
 	for (auto& chunk : m_chunks)
 		delete chunk.second;
+	m_chunks.clear();
+
+	// chunks are owned by the octree; free them (and their GL buffers) before the shared resources go
+	m_octree.Clear();
 
 	Chunk::DeleteShared();
 }
@@ -153,8 +157,9 @@ void VoxelScene::Update(const glm::vec3& position)
 	ZoneScoped;
 	if (m_chunkGenParams != m_chunkGenParamsNext)
 	{
-		m_chunkGenParams = m_chunkGenParamsNext;
+		// reset first: workers read m_chunkGenParams while generating, so it can only change once they're idle
 		ResetVoxelScene();
+		m_chunkGenParams = m_chunkGenParamsNext;
 		//m_noiseGenerator->SetLacunarity(m_chunkGenParamsNext.terrainLacunarity);
 		//m_noiseGenerator->SetGain(m_chunkGenParamsNext.terrainGain);
 		//m_noiseGenerator->SetOctaveCount(m_chunkGenParamsNext.terrainOctaves);
@@ -282,16 +287,15 @@ static int IntersectMovingAABBAABB(
 	const AABB& b, 
 	const glm::vec3& va, 
 	const glm::vec3& vb, 
-	uint8_t slideMaskB,
 	float& tfirst,
 	float& tlast,
 	int& intersectionAxis
 )
 {
+	intersectionAxis = -1;
 	// Exit early if ‘a’ and ‘b’ initially overlapping
 	if (TestAABBAABB(a, b)) {
 		tfirst = tlast = 0.0f;
-		fprintf(stderr, "overlapping\n");
 		return 1;
 	}
 
@@ -304,6 +308,7 @@ static int IntersectMovingAABBAABB(
 
 	// For each axis, determine times of first and last contact, if any
 	for (int i = 0; i < 3; i++) {
+		const float prevTFirst = tfirst;
 		if (v[i] < 0.0f) {
 			if (b.max[i] < a.min[i]) return 0; // Nonintersecting and moving apart
 			if (a.max[i] < b.min[i]) tfirst = glm::max((a.max[i] - b.min[i]) / v[i], tfirst);
@@ -314,6 +319,8 @@ static int IntersectMovingAABBAABB(
 			if (b.max[i] < a.min[i]) tfirst = glm::max((a.min[i] - b.max[i]) / v[i], tfirst);
 			if (a.max[i] > b.min[i]) tlast = glm::min((a.max[i] - b.min[i]) / v[i], tlast);
 		}
+		// the axis whose first contact happens last is the one we actually hit on
+		if (tfirst > prevTFirst) intersectionAxis = i;
 		// No overlap possible if time of first contact occurs after time of last contact
 		if (tfirst > tlast) return 0;
 	}
@@ -336,7 +343,6 @@ static int IntersectMovingAABBAABBAxis(
 	// Exit early if ‘a’ and ‘b’ initially overlapping
 	if (TestAABBAABB(a, b)) {
 		tfirst = tlast = 0.0f;
-		fprintf(stderr, "overlapping\n");
 		return 1;
 	}
 
@@ -399,13 +405,14 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 	AABB translatedAABB = aabb;
 	translatedAABB.Translate(targetDir);
 
-	glm::i32vec3 voxelSpaceNewMin = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceStartMin = aabb.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceNewMax = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceStartMax = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+	// floor, not truncation, so negative coordinates land in the right voxel
+	const glm::i32vec3 voxelSpaceNewMin = glm::floor(translatedAABB.min * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceStartMin = glm::floor(aabb.min * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceNewMax = glm::floor(translatedAABB.max * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceStartMax = glm::floor(aabb.max * float(UNIT_VOXEL_RESOLUTION));
 
-	// need to also check max
-	if (voxelSpaceNewMin == voxelSpaceStartMin )
+	// only skip the check if neither side of the box entered a new voxel
+	if (voxelSpaceNewMin == voxelSpaceStartMin && voxelSpaceNewMax == voxelSpaceStartMax)
 	{
 		collider.Translate(targetDir);
 		return;
@@ -414,7 +421,8 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 	AABB combinedAABB = AABB(glm::min(aabb.min, translatedAABB.min), glm::max(aabb.max, translatedAABB.max));
 	glm::i32vec3 voxelSpaceExtents = glm::ceil(combinedAABB.Extents() * float(UNIT_VOXEL_RESOLUTION) + glm::vec3(1));
 
-	bool* localBlocks = new bool[voxelSpaceExtents.x * voxelSpaceExtents.y * voxelSpaceExtents.z];
+	// vector so the early returns below (chunk not loaded yet) don't leak
+	std::vector<uint8_t> localBlocks(size_t(voxelSpaceExtents.x) * voxelSpaceExtents.y * voxelSpaceExtents.z);
 
 	// TODO:: lots of optimizations possible here. not re-grabbing chunks every iteration. better prioritization of AABB checking in second loop
 	// should check AABB's closest in direction of movement first. combining neighboring AABBs to do less checks. 
@@ -444,11 +452,11 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 
 	index = 0;
 	AABB voxelAABB;
-	glm::vec3 roundedMin = glm::vec3(glm::i32vec3(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION))) * VOXEL_UNIT_SIZE;
+	glm::vec3 roundedMin = glm::floor(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION)) * VOXEL_UNIT_SIZE;
 	glm::vec3 voxelAABBMin;
 	float tFirst = 0, tLast = 0;
 	bool collided = false;
-	int intersectionAxis;
+	int intersectionAxis = -1;
 	for (int i = 0; i < voxelSpaceExtents.x; i++)
 	{
 		if (collided) break;
@@ -466,7 +474,7 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 					voxelAABB = { voxelAABBMin, voxelAABBMin + glm::vec3(VOXEL_UNIT_SIZE) };
 					// this is potentially problematic. if theres two AABBs in our path, and were going fast enough to collide with both of them. then only one will get collided with. and it could be the further one.
 					// need to sort by distance or something. combining would help a bit.
-					if (IntersectMovingAABBAABB(voxelAABB, aabb, glm::vec3(0), targetDir, 0, tFirst, tLast, intersectionAxis) != 0)
+					if (IntersectMovingAABBAABB(voxelAABB, aabb, glm::vec3(0), targetDir, tFirst, tLast, intersectionAxis) != 0)
 					{
 						collided = true;
 						break;
@@ -479,15 +487,18 @@ void VoxelScene::ResolveBoxCollider(BoxCollider& collider, float timeDelta)
 	if (collided)
 	{
 		collider.Translate(targetDir * glm::min(tFirst, 1.0f) * 0.999f);
-		collider.SetVelocityIndex(intersectionAxis, 0);
-		collider.SetSlideMask(intersectionAxis);
+		if (intersectionAxis >= 0)
+		{
+			collider.SetVelocityIndex(intersectionAxis, 0);
+			// slide mask is indexed by BlockFace (axis * 2 + 0 for +dir, 1 for -dir)
+			collider.SetSlideMask(intersectionAxis * 2 + (targetDir[intersectionAxis] > 0.0f ? 0 : 1));
+		}
 	}
 	else
 	{
 		collider.Translate(targetDir);
 	}
 
-	delete [] localBlocks;
 }
 
 void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
@@ -506,13 +517,14 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 	AABB translatedAABB = aabb;
 	translatedAABB.Translate(targetDir);
 
-	glm::i32vec3 voxelSpaceNewMin = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceStartMin = aabb.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceNewMax = translatedAABB.min * float(UNIT_VOXEL_RESOLUTION);
-	glm::i32vec3 voxelSpaceStartMax = aabb.min * float(UNIT_VOXEL_RESOLUTION);
+	// floor, not truncation, so negative coordinates land in the right voxel
+	const glm::i32vec3 voxelSpaceNewMin = glm::floor(translatedAABB.min * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceStartMin = glm::floor(aabb.min * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceNewMax = glm::floor(translatedAABB.max * float(UNIT_VOXEL_RESOLUTION));
+	const glm::i32vec3 voxelSpaceStartMax = glm::floor(aabb.max * float(UNIT_VOXEL_RESOLUTION));
 
-	// need to also check max
-	if (voxelSpaceNewMin == voxelSpaceStartMin)
+	// only skip the check if neither side of the box entered a new voxel
+	if (voxelSpaceNewMin == voxelSpaceStartMin && voxelSpaceNewMax == voxelSpaceStartMax)
 	{
 		collider.Translate(targetDir);
 		return;
@@ -521,7 +533,8 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 	AABB combinedAABB = AABB(glm::min(aabb.min, translatedAABB.min), glm::max(aabb.max, translatedAABB.max));
 	glm::i32vec3 voxelSpaceExtents = glm::ceil(combinedAABB.Extents() * float(UNIT_VOXEL_RESOLUTION) + glm::vec3(1));
 
-	bool* localBlocks = new bool[voxelSpaceExtents.x * voxelSpaceExtents.y * voxelSpaceExtents.z];
+	// vector so the early returns below (chunk not loaded yet) don't leak
+	std::vector<uint8_t> localBlocks(size_t(voxelSpaceExtents.x) * voxelSpaceExtents.y * voxelSpaceExtents.z);
 
 	// TODO:: lots of optimizations possible here. not re-grabbing chunks every iteration. better prioritization of AABB checking in second loop
 	// should check AABB's closest in direction of movement first. combining neighboring AABBs to do less checks. 
@@ -550,7 +563,7 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 	}
 
 	AABB voxelAABB;
-	glm::vec3 roundedMin = glm::vec3(glm::i32vec3(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION))) * VOXEL_UNIT_SIZE;
+	glm::vec3 roundedMin = glm::floor(combinedAABB.min * float(UNIT_VOXEL_RESOLUTION)) * VOXEL_UNIT_SIZE;
 	glm::vec3 voxelAABBMin;
 	float tFirst[3] = { 1, 1, 1 }, tLast[3] = { 1, 1, 1 };
 	float tFirstTemp = 0, tLastTemp = 0;
@@ -614,9 +627,6 @@ void VoxelScene::ResolveBoxCollider2(BoxCollider& collider, float timeDelta)
 	//	}
 	//}
 
-	fprintf(stderr, "Colliding on %d, %d, %d\n", collided[0], collided[1], collided[2]);
-
-	delete[] localBlocks;
 }
 
 bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
@@ -700,6 +710,7 @@ bool VoxelScene::RayCast(const Ray& ray, VoxelRayHit& voxelRayHit)
 			exitedChunk = false;
 		}
 	}
+	hitPos = currChunk->GetChunkPos() + (glm::vec3(voxelIndex)) * VOXEL_UNIT_SIZE;
 	if (collided)
 	{
 		voxelRayHit = 
@@ -731,6 +742,9 @@ bool VoxelScene::DeleteBlock(const Ray& ray)
 			if (hit.voxelIndex[i] >= CHUNK_VOXEL_SIZE - 1)
 			{
 				Chunk* neighborChunk = m_octree.GetChunkAtWorldPos(hit.voxelHitPosition + dir * float(1u << hit.chunk->GetLOD()) * 1.5f);
+				// neighbor may not exist yet, may still be generating, or may be a different lod
+				if (neighborChunk == nullptr || neighborChunk == hit.chunk || !neighborChunk->IsDeletable() || neighborChunk->GetLOD() != hit.chunk->GetLOD())
+					continue;
 				glm::i8vec3 neighborIndex = hit.voxelIndex;
 				neighborIndex += glm::i8vec3(1);
 				neighborIndex[i] = 0;
@@ -740,6 +754,8 @@ bool VoxelScene::DeleteBlock(const Ray& ray)
 			else if (hit.voxelIndex[i] <= 0)
 			{
 				Chunk* neighborChunk = m_octree.GetChunkAtWorldPos(hit.voxelHitPosition - dir * float(1u << hit.chunk->GetLOD()) * .5f);
+				if (neighborChunk == nullptr || neighborChunk == hit.chunk || !neighborChunk->IsDeletable() || neighborChunk->GetLOD() != hit.chunk->GetLOD())
+					continue;
 				glm::i8vec3 neighborIndex = hit.voxelIndex;
 				neighborIndex += glm::i8vec3(1);
 				neighborIndex[i] = Chunk::INT_CHUNK_VOXEL_SIZE - 1;
@@ -837,6 +853,10 @@ void VoxelScene::AddToMeshListCallback(Chunk* chunk)
 
 void VoxelScene::AddToRenderListCallback(Chunk* chunk)
 {
+	// with the octree the render list is rebuilt every frame from m_frameChunks, and this list is
+	// never drained. collecting into it would grow forever and hold dangling pointers to deleted chunks.
+	if (m_useOctree)
+		return;
 	std::lock_guard lock(m_renderCallbackListMutex);
 	m_renderCallbackList.push_back(chunk);
 }

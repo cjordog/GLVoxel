@@ -6,6 +6,7 @@
 #include <functional>
 #include <unordered_map>
 #include <thread>
+#include <atomic>
 
 #include "Common.h"
 #include "RenderSettings.h"
@@ -123,8 +124,8 @@ public:
 	void DeleteBlockAtInternalIndex(const glm::i8vec3& index);
 	void ReplaceBlockAtIndex(const glm::i8vec3& index, BlockType b);
 
-	bool IsEmpty() const { return bool(m_empty); }
-	bool IsNoGeo() const { return bool(m_noGeo); }
+	bool IsEmpty() const { return m_empty.load(); }
+	bool IsNoGeo() const { return m_noGeo.load(); }
 	bool Renderable() const; // can we turn our render chunks back into const Chunk*?
 
 	void Render(RenderSettings::DrawMode drawMode);
@@ -203,9 +204,13 @@ private:
 
 	BlockFace m_LODSeamDir = BlockFace::Right;
 
-	uint m_meshGenerated	: 1 = 0;
-	uint m_buffersGenerated : 1 = 0;
-	uint m_empty			: 1 = 1;
-	uint m_noGeo			: 1 = 0;	// could this be combined with m_empty? probably
-	uint m_needsLODSeam		: 1 = 0;
+	// these used to be bitfields, but bitfields share one memory location so writing
+	// different ones from the worker and main thread at the same time is a data race.
+	// m_meshGenerated/m_buffersGenerated are only touched by the main thread once
+	// m_renderable has been published by the worker.
+	bool m_meshGenerated = false;
+	bool m_buffersGenerated = false;
+	std::atomic<bool> m_empty = true;
+	std::atomic<bool> m_noGeo = false;	// could this be combined with m_empty? probably
+	bool m_needsLODSeam = false;
 };
